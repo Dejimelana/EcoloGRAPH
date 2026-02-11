@@ -12,7 +12,7 @@
 
 EcoloGRAPH is a **Graph RAG (Retrieval-Augmented Generation) system** designed specifically for ecological and environmental research. It transforms PDF scientific publications into a structured, queryable knowledge base where every entity is traceable to its exact source (paper, page, paragraph).
 
-<img width="479" height="473" alt="image" src="https://github.com/user-attachments/assets/4c674b4e-05fa-418a-a94e-0c26461d5253" />
+   <img width="479" height="473" alt="image" src="https://github.com/user-attachments/assets/4c674b4e-05fa-418a-a94e-0c26461d5253" />
 
 ### 🎯 Key Features
 
@@ -28,7 +28,7 @@ EcoloGRAPH is a **Graph RAG (Retrieval-Augmented Generation) system** designed s
 
 ### 🆕 Recent Improvements (v1.4.0)
 
-<img width="476" height="479" alt="image" src="https://github.com/user-attachments/assets/5e8d0fa4-693a-4c9d-a408-f78efb2adb4e" />
+   <img width="476" height="479" alt="image" src="https://github.com/user-attachments/assets/5e8d0fa4-693a-4c9d-a408-f78efb2adb4e" />
 
 - **Paper-Based Entity Extraction** — Redesigned from chunk-by-chunk to paper-level processing with 70% fewer LLM calls
 - **LM Studio Auto-Restart** — Automatic recovery from context overflow crashes
