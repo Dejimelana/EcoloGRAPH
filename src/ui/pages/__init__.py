@@ -1,0 +1,3 @@
+"""
+EcoloGRAPH UI — Pages package.
+"""

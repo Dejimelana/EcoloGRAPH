@@ -1,0 +1,47 @@
+# Core dependencies
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# PDF Processing
+docling>=0.1.0
+PyMuPDF>=1.23.0
+
+# LLM & Agent
+openai>=1.0.0
+langchain-openai>=0.1.0
+langgraph>=0.1.0
+sentence-transformers>=2.2.0
+
+# Vector Store
+qdrant-client>=1.7.0
+
+# Graph Database
+neo4j>=5.0.0
+
+# Graph Analysis & Visualization
+networkx>=3.0
+pyvis>=0.3.0
+
+# Web Scraping / API clients
+requests>=2.31.0
+httpx>=0.25.0
+aiohttp>=3.9.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# UI
+streamlit>=1.29.0
+streamlit-agraph>=0.0.45  # Interactive graph visualization for Graph Explorer V2
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+
+# Utilities
+tqdm>=4.66.0
+tenacity>=8.2.0
+diskcache>=5.6.0

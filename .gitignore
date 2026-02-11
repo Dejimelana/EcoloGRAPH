@@ -1,0 +1,104 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment variables
+.env
+.env.local
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Data files (keep structure, ignore content)
+data/raw/*
+data/processed/*
+data/cache/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/cache/.gitkeep
+Exploring Agent Frameworks For EcoloGRAPH.md
+FIX_GRAPH_OSCILLATION.txt
+ingestion.logfile
+
+# Cache directories
+.cache/
+*.db-shm
+*.db-wal
+
+# Temp files
+temp_*.py
+
+# Neo4j data
+neo4j_data/
+
+# Qdrant data
+qdrant_data/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Model files (too large for git)
+*.bin
+*.gguf
+*.safetensors
+
+# Config secrets
+config/api-key
+
+# Database files
+data/*.db
+
+# Gemini / Agent artifacts
+.gemini/
+.agent/
+
+# Reference papers (large PDFs, not for distribution)
+refs/
+
+# Pyvis temp HTML files
+*_graph.html

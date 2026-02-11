@@ -1,0 +1,116 @@
+{
+  "papers": [
+    {
+      "doc_id": "e242fb7fb775",
+      "title": "-Flower-power---How-flowering-affects-spectral-diversity-me_2024_Ecological-",
+      "primary_domain": "remote_sensing",
+      "study_type": "unknown",
+      "domain_vector": {
+        "remote_sensing": 0.16129032258064516,
+        "botany": 0.15789473684210525,
+        "spatial_ecology": 0.08,
+        "soil_science": 0.06060606060606061,
+        "entomology": 0.05405405405405406,
+        "genetics": 0.05,
+        "microbial_ecology": 0.04,
+        "machine_learning": 0.03278688524590164,
+        "computer_vision": 0.03225806451612903
+      }
+    },
+    {
+      "doc_id": "312f551b0c1f",
+      "title": "A-reliable-unmanned-aerial-vehicle-multi-target-tracking-sys_2024_Ecological",
+      "primary_domain": "remote_sensing",
+      "study_type": "modeling",
+      "domain_vector": {
+        "remote_sensing": 0.0967741935483871,
+        "spatial_ecology": 0.08,
+        "computer_vision": 0.06451612903225806,
+        "soil_science": 0.06060606060606061,
+        "genetics": 0.05,
+        "machine_learning": 0.03278688524590164,
+        "marine_ecology": 0.029850746268656716
+      }
+    },
+    {
+      "doc_id": "4c005aeec130",
+      "title": "About-polygon-area-uncertainty-in-GIS-and-its-implicatio_2024_Ecological-Inf",
+      "primary_domain": "remote_sensing",
+      "study_type": "laboratory",
+      "domain_vector": {
+        "remote_sensing": 0.06451612903225806,
+        "botany": 0.05263157894736842,
+        "microbiology": 0.05,
+        "genetics": 0.05,
+        "deep_learning": 0.03225806451612903
+      }
+    },
+    {
+      "doc_id": "480a17e88ab8",
+      "title": "Advancing-reservoirs-water-quality-parameters-estimation-usin_2024_Ecologica",
+      "primary_domain": "remote_sensing",
+      "study_type": "modeling",
+      "domain_vector": {
+        "remote_sensing": 0.2903225806451613,
+        "methodology": 0.21212121212121213,
+        "soil_science": 0.15151515151515152,
+        "phycology": 0.06451612903225806,
+        "soundscape_ecology": 0.057971014492753624,
+        "botany": 0.05263157894736842,
+        "genetics": 0.05,
+        "machine_learning": 0.04918032786885246,
+        "physiology": 0.03508771929824561,
+        "computer_vision": 0.03225806451612903,
+        "deep_learning": 0.03225806451612903,
+        "marine_ecology": 0.029850746268656716
+      }
+    },
+    {
+      "doc_id": "f2ef24aefe66",
+      "title": "Aquatic-vegetation-mapping-with-UAS-cameras-consideri_2024_Ecological-Inform",
+      "primary_domain": "remote_sensing",
+      "study_type": "laboratory",
+      "domain_vector": {
+        "remote_sensing": 0.12903225806451613,
+        "soil_science": 0.12121212121212122,
+        "freshwater_ecology": 0.05714285714285714,
+        "botany": 0.05263157894736842,
+        "microbiology": 0.05,
+        "genetics": 0.05,
+        "computer_vision": 0.04838709677419355,
+        "machine_learning": 0.03278688524590164,
+        "ai_modeling": 0.03225806451612903
+      }
+    }
+  ],
+  "combined_vector": {
+    "methodology": 0.2121,
+    "remote_sensing": 0.1484,
+    "soil_science": 0.0985,
+    "spatial_ecology": 0.08,
+    "botany": 0.0789,
+    "phycology": 0.0645,
+    "soundscape_ecology": 0.058,
+    "freshwater_ecology": 0.0571,
+    "entomology": 0.0541,
+    "genetics": 0.05,
+    "microbiology": 0.05,
+    "computer_vision": 0.0444,
+    "microbial_ecology": 0.04,
+    "machine_learning": 0.0369,
+    "physiology": 0.0351,
+    "deep_learning": 0.0323,
+    "ai_modeling": 0.0323,
+    "marine_ecology": 0.0299
+  },
+  "shared_domains": [
+    {
+      "domain": "remote_sensing",
+      "avg_score": 0.1484
+    },
+    {
+      "domain": "genetics",
+      "avg_score": 0.05
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+You are extracting key entities from a scientific research paper.
+
+PAPER METADATA:
+Title: {title}
+Authors: {authors}
+Year: {year}
+
+TASK:
+Extract ALL key entities, methods, measurements, and locations from the paper chunks below. These chunks are sequential sections from the same paper.
+
+IMPORTANT:
+1. Be domain-agnostic: Extract entities regardless of scientific field (AI, engineering, remote sensing, etc.)
+2. Focus on concrete entities: organisms, materials, devices, locations, algorithms, datasets
+3. Include measurements and parameters with their values
+4. Preserve exact terminology from the paper
+
+---
+
+DOCUMENT CHUNKS:
+{chunks}
+
+---
+
+Extract entities in the following JSON format:
+
+{{
+  "key_entities": [
+    {{
+      "name": "YOLOv8",
+      "type": "algorithm",
+      "description": "object detection model",
+      "text_snippet": "using YOLOv8 for real-time detection..."
+    }},
+    {{
+      "name": "UAV",
+      "type": "device",
+      "description": "unmanned aerial vehicle",
+      "text_snippet": "UAV equipped with multispectral camera..."
+    }}
+  ],
+  "locations": [
+    {{
+      "name": "Beijing",
+      "country": "China",
+      "context": "study site",
+      "text_snippet": "experiments conducted in Beijing..."
+    }}
+  ],
+  "measurements": [
+    {{
+      "parameter": "accuracy",
+      "value": 95.3,
+      "unit": "percent",
+      "context": "model performance",
+      "text_snippet": "achieved 95.3% detection accuracy..."
+    }},
+    {{
+      "parameter": "flight altitude",
+      "value": 120,
+      "unit": "m",
+      "value_min": 100,
+      "value_max": 150,
+      "text_snippet": "UAV operated at 120m altitude (range 100-150m)..."
+    }}
+  ],
+  "methods": [
+    {{
+      "name": "deep learning",
+      "description": "convolutional neural network for image classification",
+      "text_snippet": "employed CNN-based deep learning approach..."
+    }}
+  ],
+  "datasets": [
+    {{
+      "name": "ImageNet",
+      "size": 1000000,
+      "description": "pre-training dataset",
+      "text_snippet": "model pre-trained on ImageNet (1M images)..."
+    }}
+  ],
+  "species": [
+    {{
+      "original_name": "Pinus sylvestris",
+      "common_name": "Scots pine",
+      "text_snippet": "canopy structure of P. sylvestris..."
+    }}
+  ]
+}}
+
+NOTES:
+- "key_entities" captures anything important: algorithms, devices, materials, software, etc.
+- "species" included for compatibility, but can be empty if none mentioned
+- "measurements" includes any quantitative values: accuracy, speed, size, temperature, etc.
+- If a field doesn't apply, use empty array []
+
+Return ONLY the JSON object, no additional text.

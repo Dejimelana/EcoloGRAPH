@@ -1,0 +1,70 @@
+Extract ecological data from the following text. Respond with a JSON object containing the extracted entities.
+
+TEXT:
+{text}
+
+---
+
+DOCUMENT CONTEXT:
+- Document ID: {doc_id}
+- Chunk ID: {chunk_id}
+- Section: {section}
+
+---
+
+Extract all species mentions, measurements, locations, temporal information, and ecological relationships from the text above.
+
+For each extraction, include the exact text snippet that supports it in the "text_snippet" field.
+
+Respond with ONLY valid JSON matching this structure:
+{{
+  "species": [
+    {{
+      "original_name": "species name as in text",
+      "common_name": "common name if any",
+      "life_stage": "adult/juvenile/etc or null"
+    }}
+  ],
+  "measurements": [
+    {{
+      "parameter": "what is measured",
+      "value": 123.4,
+      "unit": "unit symbol",
+      "value_min": null,
+      "value_max": null,
+      "species": "species this applies to or null",
+      "life_stage": null,
+      "is_mean": false,
+      "text_snippet": "exact quote from text"
+    }}
+  ],
+  "locations": [
+    {{
+      "name": "location name",
+      "latitude": null,
+      "longitude": null,
+      "region": "larger region",
+      "country": null,
+      "habitat_type": null,
+      "text_snippet": "exact quote"
+    }}
+  ],
+  "temporal": [
+    {{
+      "start_date": null,
+      "end_date": null,
+      "season": null,
+      "description": "temporal context",
+      "text_snippet": "exact quote"
+    }}
+  ],
+  "relations": [
+    {{
+      "relation_type": "predation/habitat_use/etc",
+      "subject": "entity 1",
+      "object": "entity 2",
+      "description": "details",
+      "text_snippet": "exact quote"
+    }}
+  ]
+}}

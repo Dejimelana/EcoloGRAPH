@@ -1,0 +1,76 @@
+You are extracting ecological entities from a scientific paper.
+
+PAPER METADATA:
+Title: {title}
+Authors: {authors}
+Year: {year}
+
+TASK:
+Extract ALL species, locations, measurements, temporal information, and ecological relations from the chunks below. These chunks are sequential sections from the same paper, so they may reference entities mentioned earlier (e.g., "the species", "this location", "aforementioned population").
+
+IMPORTANT:
+1. Resolve cross-references: When text says "the species" or "this measurement", identify what it refers to based on context
+2. Consolidate duplicates: Treat "P. minutus", "Pogonus minutus", and "the carabid beetle" as the same entity if context indicates so
+3. Preserve traceability: Include text_snippet showing exactly where each entity appears
+
+---
+
+DOCUMENT CHUNKS:
+{chunks}
+
+---
+
+Extract entities in the following JSON format:
+
+{{
+  "species": [
+    {{
+      "original_name": "Pogonus minutus",
+      "scientific_name": "Pogonus minutus",
+      "common_name": "small ground beetle",
+      "text_snippet": "P. minutus populations were observed..."
+    }}
+  ],
+  "locations": [
+    {{
+      "name": "Doñana National Park",
+      "country": "Spain",
+      "habitat_type": "wetland",
+      "latitude": 37.0,
+      "longitude": -6.5,
+      "text_snippet": "fieldwork in Doñana National Park..."
+    }}
+  ],
+  "measurements": [
+    {{
+      "parameter": "body length",
+      "value": 4.2,
+      "unit": "mm",
+      "value_min": 3.8,
+      "value_max": 4.6,
+      "species": "Pogonus minutus",
+      "is_mean": true,
+      "text_snippet": "mean body length was 4.2 mm (range 3.8-4.6)"
+    }}
+  ],
+  "temporal": [
+    {{
+      "start_date": "2020-03",
+      "end_date": "2020-09",
+      "season": "spring-autumn",
+      "description": "sampling period",
+      "text_snippet": "sampled from March to September 2020"
+    }}
+  ],
+  "relations": [
+    {{
+      "relation_type": "feeds_on",
+      "subject": "Pogonus minutus",
+      "object": "Collembola",
+      "description": "predation relationship observed in field",
+      "text_snippet": "P. minutus actively preying on Collembola"
+    }}
+  ]
+}}
+
+Return ONLY the JSON object, no additional text.

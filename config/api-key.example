@@ -1,0 +1,4 @@
+# Place your LM Studio API key here (one line, no quotes)
+# This file is auto-loaded by config.py — no .env needed
+# Example:
+# sk-lm-your-key-here

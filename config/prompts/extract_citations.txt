@@ -1,0 +1,39 @@
+You are extracting bibliographic citations from a paper's References section.
+
+Extract ALL citations and return them as a JSON array. For each citation, extract:
+- authors: list of author names (last name, first initial format if possible)
+- title: exact paper title
+- year: publication year as integer
+- journal: journal or venue name  
+- doi: DOI if present (null if not)
+
+REFERENCES SECTION:
+{references_text}
+
+Return as JSON array:
+
+[
+  {{
+    "authors": ["Smith, J.", "Doe, A."],
+    "title": "Marine fish biodiversity trends in the North Atlantic",
+    "year": 2023,
+    "journal": "Nature Ecology & Evolution",
+    "doi": "10.1038/s41559-023-12345"
+  }},
+  {{
+    "authors": ["Johnson, B.", "Williams, C."],
+    "title": "Climate change impacts on coastal fisheries",
+    "year": 2022,
+    "journal": "Science",
+    "doi": null
+  }}
+]
+
+IMPORTANT:
+- Extract authors and title EXACTLY as written
+- Year must be an integer (not string)
+- If DOI not present, use null (not empty string)
+- Skip incomplete or malformed citations
+- Ignore non-paper citations (books, reports, websites) unless they have a DOI
+
+Return ONLY the JSON array, no additional text.
