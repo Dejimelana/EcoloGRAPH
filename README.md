@@ -479,7 +479,7 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 For questions, suggestions, or collaboration:
 - Open an issue on GitHub
-- Email: your@email.com (replace with actual contact)
+- Email: diego.jimenez@mncn.csic.es
 
 ---
 
