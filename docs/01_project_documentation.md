@@ -130,8 +130,8 @@ streamlit run scripts/app.py
 ### Run Tests
 
 ```bash
-python -m pytest tests/test_integration.py -v
-# Expected: 33/33 passing
+python -m pytest tests/ -v
+# Expected: 58/58 passing
 ```
 
 ## 8. Querying Your Data
@@ -193,11 +193,11 @@ RETURN p.title, p.doc_id
 ## 9. Current Status
 
 All phases (0–9) are complete:
-- ✅ 38 Python files across 10 modules
+- ✅ 120+ Python files across 10+ modules
 - ✅ 43 scientific domains with weighted keyword classification
-- ✅ 7 agent tools (search, classify, species, graph, hypotheses)
-- ✅ 33/33 integration tests passing
-- ✅ Streamlit UI with 4 pages
+- ✅ 8 agent tools (search, classify, species, graph, hypotheses, citations, validate)
+- ✅ 58/58 tests passing (integration + unit)
+- ✅ Streamlit UI with 8 pages + dark/light theme
 
 ## 9. License & Credits
 

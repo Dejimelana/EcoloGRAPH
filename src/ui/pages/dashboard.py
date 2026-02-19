@@ -32,7 +32,7 @@ def render():
     c1, c2, c3, c4 = st.columns(4)
     c1.markdown(metric_card(paper_count, "Papers Indexed", "📄"), unsafe_allow_html=True)
     c2.markdown(metric_card(domain_count, "Active Domains", "🏷️"), unsafe_allow_html=True)
-    c3.markdown(metric_card(7, "Agent Tools", "🔧"), unsafe_allow_html=True)
+    c3.markdown(metric_card(8, "Agent Tools", "🔧"), unsafe_allow_html=True)
     c4.markdown(metric_card(43, "Scientific Domains", "🔬"), unsafe_allow_html=True)
 
     st.markdown("---")
@@ -111,7 +111,7 @@ def render():
         ("🔍 Search", "SQLite FTS5 (BM25) + Qdrant semantic + hybrid reranking"),
         ("🕸️ Graph", "Neo4j knowledge graph with 15 Cypher query templates"),
         ("🔗 Inference", "Cross-domain linker + hypothesis generator"),
-        ("🤖 Agent", "LangGraph two-tier agent with 7 tools"),
+        ("🤖 Agent", "LangGraph two-tier agent with 8 tools + multilingual"),
         ("🌐 Scrapers", "FishBase + GBIF + IUCN Red List API clients"),
     ]
 

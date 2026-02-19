@@ -24,10 +24,11 @@ EcoloGRAPH is a **Graph RAG (Retrieval-Augmented Generation) system** designed s
   - **Smart Chunking**: Section-aware hybrid chunking for optimal retrieval.
   - **Auto-Restart**: Built-in mitigation for LLM memory leaks.
 - **🔍 Hybrid Search Engine**: Combines **Qdrant** (semantic) + **SQLite FTS5** (keyword) + reranking.
-- **🕸️ Interactive Graph Explorer**: 4 visualization modes including Connected Papers-style explorer.
+- **🕸️ Interactive Graph Explorer**: Full-width graph with node-click details, species co-occurrence edges, and chunk viewer.
 - **🧠 Cross-Domain Inference**: Automatic hypothesis generation from multi-domain connections.
 - **🤖 Interactive Agent**: LangGraph-powered agent with 8 specialized tools.
-- **🐟 Species Enrichment**: FishBase, GBIF, and IUCN Red List API integration.
+- **🐟 Species Enrichment**: FishBase, GBIF, and IUCN Red List API integration with common name resolution.
+- **🧬 Taxonomy Explorer**: GBIF-powered name resolver, batch validation, and taxonomic statistics.
 - **💻 100% Local**: Runs on Ollama (recommended) or any OpenAI-compatible API — no cloud costs.
 - **🎨 Modern UI**: Streamlit dashboard with dark/light themes and glassmorphism design.
 
@@ -66,7 +67,7 @@ PDFs → Parser → Chunker → Domain Classifier → Entity Extractor (LLM)
                               8 tools
                                   ↓
                           Streamlit Dashboard
-                              9 pages
+                              8 pages
 ```
 
 ---
@@ -82,10 +83,26 @@ PDFs → Parser → Chunker → Domain Classifier → Entity Extractor (LLM)
 | LM Studio or Ollama | For LLM features | Entity extraction + chat agent |
 | GPU 8GB+ VRAM | Recommended | Local LLM inference speed |
 
+### 💻 System Requirements
+
+| Resource | Minimum | Recommended |
+|----------|---------|-------------|
+| **Disk Space** | ~5 GB (code + models + Docker images) | ~15 GB (with ingested data + embeddings) |
+| **RAM** | 8 GB | 16 GB+ (LLM + Neo4j + Qdrant in parallel) |
+| **GPU VRAM** | Not required (CPU mode) | 8 GB+ (RTX 3060 or higher for fast ingestion) |
+| **CPU** | 4 cores | 8+ cores (parallel ingestion + services) |
+| **OS** | Windows 10/11, Linux, macOS | Windows 11 / Ubuntu 22.04+ |
+| **Docker** | Required for Qdrant + Neo4j | Docker Desktop with WSL2 backend |
+| **LLM Backend** | Ollama (primary) or LM Studio | Ollama with `qwen3:8b` (~5 GB model) |
+
+> **Note**: EcoloGRAPH runs 100% locally. No cloud API keys or internet required after initial setup.
+> Both **Ollama** (recommended, port `11434`) and **LM Studio** (port `1234`) are supported —
+> just set `LOCAL_LLM_BASE_URL` in `.env` to your preferred backend.
+
 ### 1. Clone and Install
 
 ```bash
-git clone https://github.com/yourusername/EcoloGRAPH.git
+git clone https://github.com/Dejimelana/EcoloGRAPH.git
 cd EcoloGRAPH
 
 # Create and activate environment
@@ -392,18 +409,17 @@ EcoloGRAPH/
 
 ## 🎨 Streamlit Dashboard
 
-9-page dashboard with dark/light themes and glassmorphism design:
+8-page dashboard with dark/light themes and glassmorphism design:
 
 | Page | Features |
 |------|----------|
 | 📊 Dashboard | Metrics, service status, domain distribution charts |
 | 💬 Chat | Interactive LangGraph agent with tool call visualization |
 | 📄 Papers | Paper browser with PDF.js viewer, metadata, and abstracts |
-| 🕸️ Graph | 4 interactive views: Paper Network, Domain Map, Community, Concept Map |
-| 🔗 Graph V2 | **NEW** Connected Papers-style explorer with click-to-explore nodes, sidebar metadata, chunk viewer with entity highlighting |
-| 🔍 Search | Hybrid search with result cards and domain filters |
-| 🧬 Species | FishBase/GBIF/IUCN tabbed species explorer |
-| ✅ Validation | Species validation and data quality checks |
+| 🕸️ Graph | Full-width interactive graph with node-click details panel, species co-occurrence edges, chunk viewer with entity highlighting |
+| 🔍 Search | Hybrid search with clickable results and species common-name search |
+| 🧬 Species | GBIF-powered species explorer with common name resolution, distribution maps, and occurrence records |
+| ✅ Taxonomy Explorer | GBIF name resolver, batch validation, taxonomic statistics, Neo4j species browser |
 | 🔬 Classifier | Text classification demo, cross-domain links, hypothesis generation |
 
 ---
@@ -452,7 +468,7 @@ EcoloGRAPH/
 | Neo4j connection error | Ensure Docker is running: `docker start neo4j` |
 | Slow chat responses | Try smaller ingestion model: `--model qwen3:1.7b` |
 | PDF viewer blank | PDF.js renders on canvas — check browser console for errors |
-| Graph V2 not loading | Install: `pip install streamlit-agraph` |
+| Graph not loading | Install: `pip install streamlit-agraph` |
 
 ---
 
@@ -462,8 +478,8 @@ EcoloGRAPH/
 # Verify installation
 python scripts/verify_setup.py
 
-# Run automated tests
-python -m pytest tests/test_integration.py -v
+# Run all 58 automated tests
+python -m pytest tests/ -v
 
 # Test LLM connection
 python scripts/diagnose_agent.py

@@ -12,6 +12,8 @@ EcoloGRAPH is made possible by the contributions of the following people:
   - Contributions: Coding for core system, Graph RAG pipeline, LangGraph agent, UI development
 - **Claude Opus 4.5** - Initial work, architecture design, and ongoing development
   - Contributions: Coding for core system, Graph RAG pipeline, LangGraph agent, UI development
+- **Antigravity (Gemini 2.5 Pro)** - v1.5.0 feature development, documentation, and UI/UX refinement
+  - Contributions: Graph Explorer V2 integration (full-width layout, co-occurrence edges, chunk viewer), Taxonomy Explorer rewrite, clickable search results, GBIF common name resolution, comprehensive documentation updates (README, ARCHITECTURE, CHANGELOG, tutorial), version and test count audit
 
 --
 
@@ -53,10 +55,10 @@ All contributors will be recognized in this file and in release notes.
 
 <!-- Update these stats periodically -->
 
-- **Total Contributors**: 1
+- **Total Contributors**: 4
 - **Pull Requests Merged**: TBD
 - **Issues Resolved**: TBD
-- **Lines of Code**: ~15,000+
+- **Lines of Code**: ~20,000+
 
 ---
 

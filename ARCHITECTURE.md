@@ -80,12 +80,11 @@ EcoloGRAPH is a **multi-layer Graph RAG system** designed for ecological researc
 - Improved compatibility with various embedding libraries (numpy arrays vs lists)
 - Batch processing now handles both formats seamlessly
 
-**Graph Explorer Consolidation** (v1.3.0)
-- Merged Graph V2 into main Graph Explorer with tabbed interface
-- Domain-based tab uses SQLite (always available, fast)
-- Entity-based tab uses Neo4j with Species/Locations (requires ingestion with entity extraction)
-- Unified sidebar for all node types with metadata display
-- Document chunks viewer with section grouping
+**Graph Explorer V2 as Main Page** (v1.5.0)
+- Switched from Graph V1 (Pyvis) to V2 (`streamlit-agraph`) as the main graph page
+- Full-width layout with node details + source chunks below on click
+- Species co-occurrence edges and entity highlighting
+- Layout selector (Barnes-Hut, Force Atlas, Hierarchical)
 
 
 ---
@@ -378,28 +377,34 @@ Response
 1. **dashboard.py** - System overview and metrics
 2. **chat.py** - Interactive agent interface
 3. **papers.py** - PDF browser with viewer
-4. **graph_explorer.py** - **Unified Graph Explorer** (Domain-based + Entity-based tabs)
-   - Domain-based tab: Papers connected via shared scientific domains (SQLite)
-   - Entity-based tab: Papers connected via Species/Locations (Neo4j)
-   - Interactive node selection with unified sidebar
-   - Document chunks viewer with section grouping
-5. **search.py** - Search interface
-6. **species.py** - Species data explorer
-7. **validation.py** - GBIF taxonomic validation
-8. **classifier.py** - Domain classifier demo
+4. **graph_explorer_v2.py** - **Full-Width Interactive Graph Explorer**
+   - Uses `streamlit-agraph` for interactive graph rendering
+   - Full-width layout with node details + source chunks **below** graph on click
+   - Species co-occurrence edges (yellow `co-occurs (N)` connections)
+   - Paper/Species/Domain node click handlers with chunk viewer and entity highlighting
+   - Layout selector (Barnes-Hut, Force Atlas, Hierarchical, etc.)
+5. **search.py** - Search interface with clickable species results and common name matching
+6. **species.py** - GBIF species explorer with common name resolution fallback
+7. **species_validation.py** - **Taxonomy Explorer**: GBIF name resolver, batch validation, species browser, taxonomy stats
+8. **domain_lab.py** - Domain classifier demo
 
-> **Note**: Graph V2 (graph_explorer_v2.py) has been deprecated and merged into graph_explorer.py as the "Interactive Explorer" mode with tabbed visualization.
+#### Recent UI Improvements (v1.5.0)
 
-#### Recent UI Improvements (v1.3.0)
+**Graph Explorer V2 as Main Page** — February 2026
+- Switched `app.py` from Graph V1 (Pyvis) to V2 (`streamlit-agraph`)
+- Full-width graph with node details panel below (replaces sidebar split)
+- Species co-occurrence edges derived from shared paper mentions
+- Chunk viewer with entity highlighting for paper and species nodes
 
-**Unified Graph Explorer** - February 2026
-- Consolidated Graph V2 functionality into main Graph Explorer
-- Added tabbed interface: Domain-based (always available) and Entity-based (requires Neo4j entities)
-- Implemented shared node click handler with session state management
-- Enhanced sidebar with paper metadata display (title, year, abstract, top domains)
-- Added functional "View Chunks" button with section-grouped expandable display
-- Fixed Neo4j Cypher query syntax for entity extraction
-- Improved chunks visibility with prominent toggle buttons
+**Taxonomy Explorer** (replaces Validation) — February 2026
+- Database Species Browser with paper count filters and CSV download
+- GBIF-powered Name Resolver: common name → scientific name resolution
+- Taxonomy Statistics: family distribution, validation status charts
+- Batch Resolution: validate all Neo4j species against GBIF
+
+**Search Improvements** — February 2026
+- Species search now matches both `scientific_name` and `common_names` fields
+- Paper titles are clickable buttons that navigate to Papers page
 
 #### Theme System
 

@@ -407,10 +407,20 @@ class GraphBuilder:
             r.confidence = $confidence
         """
         
+        sci_name = species.scientific_name or species.original_name
+        if not sci_name:
+            logger.warning(f"Skipping species with no name for paper {doc_id}")
+            return
+        
+        logger.debug(
+            f"Adding species: '{sci_name}' (original: '{species.original_name}') "
+            f"to paper {doc_id}"
+        )
+        
         with self._driver.session(database=self.database) as session:
             session.run(query, {
                 "doc_id": doc_id,
-                "scientific_name": species.scientific_name or species.original_name,
+                "scientific_name": sci_name,
                 "original_name": species.original_name,
                 "common_names": species.common_name,
                 "kingdom": species.kingdom,
@@ -823,21 +833,22 @@ class GraphBuilder:
     
     def get_stats(self) -> GraphStats:
         """Get graph statistics."""
+        # Explicit mapping — avoids the 'species' → 'specie' pluralization bug
         queries = {
-            "papers": "MATCH (p:Paper) RETURN count(p) as count",
-            "species": "MATCH (s:Species) RETURN count(s) as count",
-            "locations": "MATCH (l:Location) RETURN count(l) as count",
-            "measurements": "MATCH (m:Measurement) RETURN count(m) as count",
-            "relationships": "MATCH ()-[r]->() RETURN count(r) as count"
+            "paper_count": "MATCH (p:Paper) RETURN count(p) as count",
+            "species_count": "MATCH (s:Species) RETURN count(s) as count",
+            "location_count": "MATCH (l:Location) RETURN count(l) as count",
+            "measurement_count": "MATCH (m:Measurement) RETURN count(m) as count",
+            "relationship_count": "MATCH ()-[r]->() RETURN count(r) as count"
         }
         
         stats = GraphStats()
         
         with self._driver.session(database=self.database) as session:
-            for key, query in queries.items():
+            for attr, query in queries.items():
                 result = session.run(query)
                 count = result.single()["count"]
-                setattr(stats, f"{key[:-1] if key.endswith('s') else key}_count", count)
+                setattr(stats, attr, count)
         
         return stats
     

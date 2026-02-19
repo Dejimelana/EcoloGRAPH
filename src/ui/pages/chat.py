@@ -20,8 +20,8 @@ def render():
     # --- Initialize agent (cached) ---
     agent = _get_agent()
     if agent is None:
-        st.error("⚠️ Could not connect to the LLM. Make sure LM Studio is running on port 1234.")
-        st.code("# Start LM Studio and load a model, then refresh this page", language="bash")
+        st.error("⚠️ Could not connect to the LLM. Make sure Ollama is running.")
+        st.code("# Start Ollama and pull a model:\nollama pull qwen3:8b", language="bash")
         return
 
     # Show agent info
@@ -81,7 +81,7 @@ def render():
                 try:
                     status_placeholder = st.empty()
                     
-                    for event_type, content in agent.ask_streaming(prompt):
+                    for event_type, content in agent.ask_streaming(prompt, history=st.session_state.messages[:-1]):
                         if event_type == "routing":
                             status_placeholder.markdown(
                                 f'<div style="color:#64748b;font-size:0.85rem">🧭 {content}</div>',
@@ -129,8 +129,46 @@ def render():
                 "tool_calls": tool_calls,
             })
 
-    # --- Sidebar examples ---
+    # --- Sidebar ---
     with st.sidebar:
+        # Chat history export
+        st.markdown("---")
+        st.markdown("#### 💾 Chat History")
+
+        if st.session_state.get("messages"):
+            col_md, col_txt = st.columns(2)
+            with col_md:
+                if st.button("📥 Export .md", use_container_width=True):
+                    _export_chat("md")
+            with col_txt:
+                if st.button("📥 Export .txt", use_container_width=True):
+                    _export_chat("txt")
+        else:
+            st.caption("Start a conversation to enable export.")
+
+        # Browse past conversations
+        from pathlib import Path
+        history_dir = Path("data/chat_history")
+        if history_dir.exists():
+            files = sorted(history_dir.glob("*.*"), key=lambda f: f.stat().st_mtime, reverse=True)
+            if files:
+                with st.expander(f"📂 History ({len(files)} chats)", expanded=False):
+                    for f in files[:20]:
+                        col_f, col_load = st.columns([3, 1])
+                        col_f.caption(f.name)
+                        if col_load.button("📖", key=f"load_{f.name}"):
+                            st.session_state["_view_history"] = f.read_text(encoding="utf-8")
+
+        # Show history viewer
+        if "_view_history" in st.session_state:
+            st.markdown("---")
+            st.markdown("#### 📜 Past Conversation")
+            st.markdown(st.session_state["_view_history"])
+            if st.button("✖ Close", key="close_history"):
+                del st.session_state["_view_history"]
+                st.rerun()
+
+        # Quick examples
         st.markdown("---")
         st.markdown("#### 💡 Try asking:")
         examples = [
@@ -151,6 +189,36 @@ def render():
         pending = st.session_state.pop("_pending_prompt")
         st.session_state.messages.append({"role": "user", "content": pending})
         st.rerun()
+
+
+def _export_chat(fmt: str):
+    """Export current conversation to data/chat_history/."""
+    from pathlib import Path
+    from datetime import datetime
+
+    history_dir = Path("data/chat_history")
+    history_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"chat_{timestamp}.{fmt}"
+
+    lines = []
+    for msg in st.session_state.get("messages", []):
+        role_label = "🧑‍🔬 **User**" if msg["role"] == "user" else "🌿 **EcoloGRAPH**"
+        if fmt == "md":
+            lines.append(f"### {role_label}\n\n{msg['content']}\n")
+            if msg.get("tool_calls"):
+                tools_str = ", ".join(str(tc) for tc in msg["tool_calls"])
+                lines.append(f"**Tools used:** {tools_str}\n")
+        else:
+            role_tag = msg["role"].upper()
+            lines.append(f"[{role_tag}]\n{msg['content']}\n")
+            if msg.get("tool_calls"):
+                lines.append(f"[TOOLS] {', '.join(str(tc) for tc in msg['tool_calls'])}\n")
+
+    filepath = history_dir / filename
+    filepath.write_text("\n".join(lines), encoding="utf-8")
+    st.success(f"✅ Saved: {filename}")
 
 
 @st.cache_resource

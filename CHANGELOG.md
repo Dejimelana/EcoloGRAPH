@@ -45,17 +45,32 @@ Migrated primary LLM backend from LM Studio to **Ollama**, with full support for
 - **Agent AttributeError**: Fixed `self.llm` → `self.llm_fast` in `QueryAgent._agent_node`
 - **Entity Extraction Token Limit**: Increased `max_tokens` from 500 to 2048 for extraction (Qwen3 thinking consumes ~400 tokens, leaving no room for JSON)
 
-### ⚡ Performance
+### 🎨 UI/UX Improvements
 
-- **Extraction Speed**: `/no_think` eliminates ~400 thinking tokens per batch, reducing extraction time by ~40%
-- **Model Flexibility**: Users can choose smaller/faster models for ingestion and larger models for reasoning
+- **Graph Explorer V2 as Main Graph Page**: Switched `app.py` from Graph V1 (Pyvis) to V2 (`streamlit-agraph`), enabling layout selector and physics controls
+- **Full-Width Graph Layout**: Removed sidebar split — graph occupies full page width; node details + source chunks appear below on click
+- **Species Co-occurrence Edges**: Yellow `co-occurs (N)` edges between species that appear in the same papers, with line width proportional to shared paper count
+- **Taxonomy Explorer** (replaces Validation tab):
+  - Database Species Browser: filter by paper count and name, download CSV
+  - Name Resolver: enter any name (scientific or common) → GBIF resolves to canonical form with taxonomy card
+  - Taxonomy Stats: family distribution chart, validation status metrics
+  - Batch Resolution: validate all Neo4j species against GBIF in one click
+- **Clickable Species Search Results**: Paper titles in Species search tab are now buttons that navigate to Papers page
+- **Common Name Search**: Species search Cypher now matches `common_names` field in addition to `scientific_name`
+- **Species Explorer Common Name Resolution**: When GBIF `/species/match` fails, falls back to `/species/search` and shows resolved name notification
+- **GBIF `validate_species()` method**: New method on `GBIFOccurrenceClient` for name validation with `/species/match` + `/species/search` fallback
 
 ### 📚 Documentation
 
 - Updated README.md: Ollama as recommended LLM, new CLI flags, dual-model setup
+- Updated README.md: Dashboard table reflects 8-page layout (Graph V2 merged, Taxonomy Explorer)
 - Updated .env.example with dual-model variables
 - Created `docs/06_testing_guide.md` for component-by-component verification
-- Updated `docs/03_recent_updates.md` with v1.5.0 migration details
+- Updated ARCHITECTURE.md with Graph Explorer V2 and Taxonomy Explorer
+- Updated CONTRIBUTORS.md with Antigravity AI credit
+- Updated tutorial (`docs/03_tutorial.md`) with new Graph Explorer, Taxonomy Explorer, and Search sections
+- Updated CHANGELOG.md with comprehensive v1.5.0 entries
+- Test suite expanded from 33 to 58 tests across 5 test files
 
 ---
 
@@ -296,6 +311,6 @@ See [CONTRIBUTORS.md](CONTRIBUTORS.md) for the full list of contributors.
 
 ## Links
 
-- [GitHub Repository](https://github.com/yourusername/EcoloGRAPH)
+- [GitHub Repository](https://github.com/Dejimelana/EcoloGRAPH)
 - [Documentation](docs/)
-- [Issue Tracker](https://github.com/yourusername/EcoloGRAPH/issues)
+- [Issue Tracker](https://github.com/Dejimelana/EcoloGRAPH/issues)

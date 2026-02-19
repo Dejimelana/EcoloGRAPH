@@ -24,7 +24,7 @@ def render():
     
     st.markdown(
         '<div class="hero-title">🕸️ Interactive Graph Explorer</div>'
-        '<div class="hero-subtitle">Click nodes to explore • Connected Papers style</div>',
+        '<div class="hero-subtitle">Click nodes to explore • Scroll down for details & source chunks</div>',
         unsafe_allow_html=True,
     )
     
@@ -33,8 +33,6 @@ def render():
         st.session_state.selected_node = None
     if "selected_node_type" not in st.session_state:
         st.session_state.selected_node_type = None
-    if "show_chunks" not in st.session_state:
-        st.session_state.show_chunks = False
     
     # Check data availability
     papers, graph_available = _check_data_sources()
@@ -50,14 +48,13 @@ def render():
         st.warning("⚠️ Neo4j not available. Some features will be limited.")
         return
     
-    # Layout: Main graph + Sidebar
-    col_graph, col_sidebar = st.columns([2, 1])
+    # Full-width graph
+    _render_graph_panel(graph_available)
     
-    with col_graph:
-        _render_graph_panel(graph_available)
-    
-    with col_sidebar:
-        _render_sidebar_panel()
+    # Node details + chunks BELOW the graph (scrollable)
+    if st.session_state.selected_node:
+        st.markdown("---")
+        _render_node_details_panel()
 
 
 def _check_data_sources():
@@ -88,14 +85,24 @@ def _render_graph_panel(graph_available):
     """Render the main graph visualization panel."""
     st.markdown("### 🎛️ Graph Controls")
     
-    # Controls row
-    col1, col2, col3, col4, col5 = st.columns(5)
+    # Controls row 1: Layout and filters
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         layout_mode = st.selectbox(
             "Layout",
-            ["Force-Directed", "Hierarchical", "Circular"],
-            index=0
+            [
+                "Force-Directed", "Hierarchical (Top-Down)",
+                "Hierarchical (Left-Right)", "Repulsion",
+                "ForceAtlas2"
+            ],
+            index=0,
+            help=(
+                "Force-Directed: barnesHut physics • "
+                "Hierarchical: tree layouts (top-down or left-right) • "
+                "Repulsion: strong node separation • "
+                "ForceAtlas2: community clustering"
+            )
         )
     
     with col2:
@@ -103,7 +110,7 @@ def _render_graph_panel(graph_available):
             "Min Connections",
             min_value=0,
             max_value=10,
-            value=0,  # Changed to 0 to load ALL papers by default
+            value=0,
             help="Hide nodes with fewer connections"
         )
     
@@ -112,9 +119,9 @@ def _render_graph_panel(graph_available):
             "Max Nodes",
             min_value=50,
             max_value=500,
-            value=200,  # Increased to 200 for better initial view
+            value=200,
             step=50,
-            help="Limit graph size (lazy loading)"
+            help="Limit graph size for performance"
         )
     
     with col4:
@@ -124,8 +131,41 @@ def _render_graph_panel(graph_available):
             default=["All"]
         )
     
-    with col5:
+    # Controls row 2: Visual options
+    col_v1, col_v2 = st.columns(2)
+    
+    with col_v1:
         show_labels = st.checkbox("Show Labels", value=True)
+    
+    with col_v2:
+        search_node = st.text_input(
+            "🔍 Find Node",
+            placeholder="Search by title or species...",
+            help="Highlight nodes matching your search"
+        )
+    
+    # Physics settings expander (not for hierarchical)
+    is_hierarchical = layout_mode.startswith("Hierarchical")
+    
+    if not is_hierarchical:
+        with st.expander("⚙️ Physics Settings", expanded=False):
+            pcol1, pcol2, pcol3 = st.columns(3)
+            
+            with pcol1:
+                gravity = st.slider(
+                    "Gravity", -80000, -1000,
+                    -50000 if layout_mode == "Repulsion" else -30000,
+                    1000
+                )
+                spring_length = st.slider("Spring Length", 50, 500, 200, 10)
+            
+            with pcol2:
+                spring_constant = st.slider("Spring Constant", 0.01, 0.20, 0.04, 0.01)
+                damping = st.slider("Damping", 0.01, 0.50, 0.09, 0.01)
+            
+            with pcol3:
+                node_distance = st.slider("Node Distance", 50, 300, 120, 10)
+                central_gravity = st.slider("Central Gravity", 0.0, 1.0, 0.3, 0.05)
     
     st.markdown("---")
     
@@ -134,35 +174,109 @@ def _render_graph_panel(graph_available):
         nodes, edges = _build_graph_data(
             min_connections=min_connections,
             domain_filter=domain_filter if "All" not in domain_filter else None,
-            max_nodes=max_nodes  # Lazy loading control
+            max_nodes=max_nodes
         )
         
         if not nodes:
             st.warning("No nodes to display with current filters.")
             return
         
-        # Configure agraph
-        config = Config(
-            width="100%",
-            height=600,
-            directed=False,
-            physics={
-                "enabled": layout_mode == "Force-Directed",
-                "barnesHut": {
-                    "gravitationalConstant": -30000,
-                    "centralGravity": 0.3,
-                    "springLength": 200,
-                    "springConstant": 0.04,
-                    "damping": 0.09
-                }
-            },
-            hierarchical=layout_mode == "Hierarchical",
-            nodeHighlightBehavior=True,
-            highlightColor="#FF6B6B",
-            collapsible=True,
-            node={'labelProperty': 'label' if show_labels else None},
-            link={'labelProperty': 'label', 'renderLabel': False}
-        )
+        # Apply search highlight
+        if search_node:
+            search_lower = search_node.lower()
+            for node in nodes:
+                if search_lower in (node.label or "").lower():
+                    node.color = "#FF6B6B"
+                    node.size = 30
+        
+        # Build vis.js-compatible physics configuration
+        if is_hierarchical:
+            config = Config(
+                width="100%",
+                height=600,
+                directed=False,
+                physics=False,
+                hierarchical=True,
+                nodeHighlightBehavior=True,
+                highlightColor="#FF6B6B",
+                collapsible=True,
+                node={'labelProperty': 'label' if show_labels else None},
+                link={'labelProperty': 'label', 'renderLabel': False}
+            )
+        elif layout_mode == "Repulsion":
+            config = Config(
+                width="100%",
+                height=600,
+                directed=False,
+                physics={
+                    "enabled": True,
+                    "solver": "repulsion",
+                    "repulsion": {
+                        "centralGravity": central_gravity,
+                        "springLength": spring_length,
+                        "springConstant": spring_constant,
+                        "nodeDistance": node_distance,
+                        "damping": damping
+                    },
+                    "stabilization": {"iterations": 150}
+                },
+                hierarchical=False,
+                nodeHighlightBehavior=True,
+                highlightColor="#FF6B6B",
+                collapsible=True,
+                node={'labelProperty': 'label' if show_labels else None},
+                link={'labelProperty': 'label', 'renderLabel': False}
+            )
+        elif layout_mode == "ForceAtlas2":
+            config = Config(
+                width="100%",
+                height=600,
+                directed=False,
+                physics={
+                    "enabled": True,
+                    "solver": "forceAtlas2Based",
+                    "forceAtlas2Based": {
+                        "gravitationalConstant": gravity,
+                        "centralGravity": central_gravity,
+                        "springLength": spring_length,
+                        "springConstant": spring_constant,
+                        "damping": damping,
+                        "avoidOverlap": 0.5
+                    },
+                    "stabilization": {"iterations": 150}
+                },
+                hierarchical=False,
+                nodeHighlightBehavior=True,
+                highlightColor="#FF6B6B",
+                collapsible=True,
+                node={'labelProperty': 'label' if show_labels else None},
+                link={'labelProperty': 'label', 'renderLabel': False}
+            )
+        else:  # Force-Directed (barnesHut default)
+            config = Config(
+                width="100%",
+                height=600,
+                directed=False,
+                physics={
+                    "enabled": True,
+                    "solver": "barnesHut",
+                    "barnesHut": {
+                        "gravitationalConstant": gravity,
+                        "centralGravity": central_gravity,
+                        "springLength": spring_length,
+                        "springConstant": spring_constant,
+                        "damping": damping,
+                        "avoidOverlap": 0
+                    },
+                    "stabilization": {"iterations": 150}
+                },
+                hierarchical=False,
+                nodeHighlightBehavior=True,
+                highlightColor="#FF6B6B",
+                collapsible=True,
+                node={'labelProperty': 'label' if show_labels else None},
+                link={'labelProperty': 'label', 'renderLabel': False}
+            )
         
         # Render graph with click callback
         selected = agraph(nodes=nodes, edges=edges, config=config)
@@ -262,6 +376,33 @@ def _build_graph_data(min_connections=0, domain_filter=None, max_nodes=200):
                             label="mentions"
                         ))
                 
+                # Add species co-occurrence edges (species that appear in the same papers)
+                cooccur_query = """
+                MATCH (p:Paper)-[:MENTIONS]->(s1:Species),
+                      (p)-[:MENTIONS]->(s2:Species)
+                WHERE id(s1) < id(s2)
+                WITH s1.scientific_name AS sp1, s2.scientific_name AS sp2,
+                     COUNT(DISTINCT p) AS shared_papers
+                WHERE shared_papers >= 1
+                RETURN sp1, sp2, shared_papers
+                ORDER BY shared_papers DESC
+                LIMIT 100
+                """
+                with gb._driver.session(database=gb.database) as session2:
+                    cooccur_result = session2.run(cooccur_query)
+                    for cr in cooccur_result:
+                        src_id = f"species_{cr['sp1']}"
+                        tgt_id = f"species_{cr['sp2']}"
+                        # Only add edge if both species nodes exist
+                        if any(n.id == src_id for n in nodes) and any(n.id == tgt_id for n in nodes):
+                            edges.append(Edge(
+                                source=src_id,
+                                target=tgt_id,
+                                label=f"co-occurs ({cr['shared_papers']})",
+                                color="#FFD93D",
+                                width=1 + min(cr["shared_papers"], 5)
+                            ))
+                
                 gb.close()
                 logger.info(f"Built graph with {len(nodes)} nodes, {len(edges)} edges (Neo4j)")
                 return nodes, edges
@@ -346,210 +487,292 @@ def _build_graph_data(min_connections=0, domain_filter=None, max_nodes=200):
 
 def _handle_node_click(selected_node):
     """Handle node click event."""
-    # Extract node ID and type
     node_id = selected_node
     
-    # Determine node type from ID prefix
     if node_id.startswith("species_"):
         node_type = "Species"
         actual_id = node_id.replace("species_", "")
     elif node_id.startswith("location_"):
         node_type = "Location"
         actual_id = node_id.replace("location_", "")
+    elif node_id.startswith("domain_"):
+        node_type = "Domain"
+        actual_id = node_id.replace("domain_", "")
     else:
         node_type = "Paper"
         actual_id = node_id
     
     st.session_state.selected_node = actual_id
     st.session_state.selected_node_type = node_type
-    st.session_state.show_chunks = False
 
 
-def _render_sidebar_panel():
-    """Render the sidebar with node details."""
-    st.markdown("### 📋 Node Details")
-    
-    if not st.session_state.selected_node:
-        st.info("👈 Click a node in the graph to see details")
-        return
-    
+def _render_node_details_panel():
+    """Render node details and associated chunks below the graph."""
     node_id = st.session_state.selected_node
     node_type = st.session_state.selected_node_type
     
-    # Render details based on node type
     if node_type == "Paper":
-        _render_paper_details(node_id)
+        _render_paper_details_below(node_id)
     elif node_type == "Species":
-        _render_species_details(node_id)
-    elif node_type == "Location":
-        _render_location_details(node_id)
+        _render_species_details_below(node_id)
+    elif node_type == "Domain":
+        _render_domain_details_below(node_id)
+    else:
+        st.info(f"Selected: {node_id} ({node_type})")
 
 
-def _render_paper_details(doc_id):
-    """Render paper node details in sidebar."""
+def _render_paper_details_below(doc_id):
+    """Render paper details and chunks below the graph."""
     try:
         gb = GraphBuilder()
         metadata = gb.get_paper_metadata(doc_id)
+        chunks_data = gb.get_paper_chunks(doc_id)
         gb.close()
         
         if not metadata:
-            st.warning("Paper metadata not found")
+            st.warning(f"Paper metadata not found for: {doc_id}")
             return
         
-        # Header
-        st.markdown(f"#### 📄 {metadata['title']}")
+        # Paper header
+        st.markdown(f"## 📄 {metadata.get('title', 'Untitled')}")
         
-        # Metadata
-        col1, col2 = st.columns(2)
-        with col1:
-            if metadata.get('year'):
-                st.metric("Year", metadata['year'])
-        with col2:
-            if metadata.get('species'):
-                st.metric("Species", len(metadata['species']))
+        # Metadata row
+        mcol1, mcol2, mcol3, mcol4 = st.columns(4)
+        with mcol1:
+            st.metric("Year", metadata.get("year", "N/A"))
+        with mcol2:
+            species_list = metadata.get("species", [])
+            st.metric("Species", len(species_list))
+        with mcol3:
+            locations = metadata.get("locations", [])
+            st.metric("Locations", len(locations))
+        with mcol4:
+            st.metric("Chunks", len(chunks_data) if chunks_data else 0)
         
         # Authors
-        if metadata.get('authors'):
-            st.markdown("**Authors:**")
-            st.caption(", ".join(metadata['authors'][:5]))
+        if metadata.get("authors"):
+            st.markdown(f"**Authors:** {', '.join(metadata['authors'][:5])}")
+        
+        # DOI
+        if metadata.get("doi"):
+            st.markdown(f"**DOI:** [{metadata['doi']}]({metadata['doi']})")
         
         # Abstract
-        if metadata.get('abstract'):
+        if metadata.get("abstract"):
             with st.expander("📜 Abstract", expanded=True):
-                st.write(metadata['abstract'])
+                st.write(metadata["abstract"])
         
-        # Species mentioned
-        if metadata.get('species'):
-            with st.expander(f"🦎 Species ({len(metadata['species'])})", expanded=False):
-                for species in metadata['species'][:10]:
-                    st.markdown(f"- *{species}*")
+        # Species and locations in columns
+        col_sp, col_loc = st.columns(2)
+        with col_sp:
+            if species_list:
+                with st.expander(f"🦎 Species ({len(species_list)})", expanded=True):
+                    for sp in species_list[:20]:
+                        st.markdown(f"- *{sp}*")
+        with col_loc:
+            if locations:
+                with st.expander(f"📍 Locations ({len(locations)})", expanded=True):
+                    for loc in locations:
+                        st.markdown(f"- {loc}")
         
-        # Locations
-        if metadata.get('locations'):
-            with st.expander(f"📍 Locations ({len(metadata['locations'])})", expanded=False):
-                for location in metadata['locations']:
-                    st.markdown(f"- {location}")
-        
-        # Action buttons
-        st.markdown("---")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("📦 View Chunks"):
-                st.session_state.show_chunks = True
-                st.rerun()
-        
-        with col2:
-            if metadata.get('doi'):
-                st.markdown(f"[🔗 DOI]({metadata['doi']})")
-        
-        # Show chunks if requested
-        if st.session_state.show_chunks:
-            _render_chunk_viewer(doc_id)
+        # Source chunks
+        if chunks_data:
+            st.markdown("---")
+            st.markdown("### 📦 Source Text Chunks")
+            st.caption(f"{len(chunks_data)} chunks from this paper — the text that generated graph relationships")
             
+            _render_chunks_list(chunks_data, metadata)
+        
     except Exception as e:
         st.error(f"Failed to load paper details: {e}")
         logger.exception("Paper details error")
 
 
-def _render_species_details(scientific_name):
-    """Render species node details in sidebar."""
-    st.markdown(f"#### 🦎 *{scientific_name}*")
+def _render_species_details_below(scientific_name):
+    """Render species details and evidence chunks below the graph."""
+    st.markdown(f"## 🦎 *{scientific_name}*")
     
     try:
         gb = GraphBuilder()
-        papers = gb.get_species_papers(scientific_name)
+        
+        # Get papers mentioning this species
+        papers_query = """
+        MATCH (p:Paper)-[:MENTIONS]->(s:Species {scientific_name: $name})
+        RETURN p.doc_id AS doc_id, p.title AS title, p.year AS year
+        ORDER BY p.year DESC
+        """
+        # Get co-occurring species
+        cooccur_query = """
+        MATCH (p:Paper)-[:MENTIONS]->(s:Species {scientific_name: $name}),
+              (p)-[:MENTIONS]->(s2:Species)
+        WHERE s <> s2
+        WITH s2.scientific_name AS species, COUNT(DISTINCT p) AS shared
+        RETURN species, shared
+        ORDER BY shared DESC
+        LIMIT 10
+        """
+        
+        with gb._driver.session(database=gb.database) as session:
+            papers = [dict(r) for r in session.run(papers_query, {"name": scientific_name})]
+            cooccurring = [dict(r) for r in session.run(cooccur_query, {"name": scientific_name})]
+        
+        # Metrics
+        mcol1, mcol2 = st.columns(2)
+        with mcol1:
+            st.metric("Papers", len(papers))
+        with mcol2:
+            st.metric("Co-occurring Species", len(cooccurring))
+        
+        # Papers list
+        if papers:
+            with st.expander(f"📄 Papers mentioning *{scientific_name}* ({len(papers)})", expanded=True):
+                for p in papers:
+                    st.markdown(f"- **{p['title']}** ({p.get('year', 'N/A')})")
+        
+        # Co-occurring species
+        if cooccurring:
+            with st.expander(f"🔗 Co-occurring species ({len(cooccurring)})", expanded=True):
+                for c in cooccurring:
+                    st.markdown(f"- *{c['species']}* (shared in {c['shared']} papers)")
+        
+        # Evidence chunks — text where species is mentioned
+        st.markdown("---")
+        st.markdown("### 📦 Evidence Chunks")
+        st.caption(f"Text passages where *{scientific_name}* is mentioned")
+        
+        _render_species_evidence_chunks(gb, scientific_name, papers)
         gb.close()
         
-        st.metric("Papers", len(papers))
-        
-        if papers:
-            st.markdown("**Mentioned in:**")
-            for paper in papers[:10]:
-                st.markdown(f"- {paper['title']} ({paper.get('year', 'N/A')})")
-        
-        if st.button("🔍 Validate with GBIF"):
-            st.info("GBIF validation feature coming soon!")
-            
     except Exception as e:
         st.error(f"Failed to load species details: {e}")
+        logger.exception("Species details error")
 
 
-def _render_location_details(location_name):
-    """Render location node details in sidebar."""
-    st.markdown(f"#### 📍 {location_name}")
+def _render_domain_details_below(domain_name):
+    """Render domain details below the graph."""
+    st.markdown(f"## 🏷️ {domain_name.replace('_', ' ').title()}")
     
-    st.info("Location details: studies, coordinates, habitat type (coming soon)")
+    try:
+        from src.search.paper_index import PaperIndex
+        idx = PaperIndex()
+        papers = idx.get_all_papers(limit=500)
+        
+        import json
+        matching = []
+        for p in papers:
+            if p.domains:
+                domains = json.loads(p.domains) if isinstance(p.domains, str) else p.domains
+                if domain_name in domains and domains[domain_name] > 0.1:
+                    matching.append(p)
+        
+        st.metric("Papers", len(matching))
+        
+        if matching:
+            with st.expander(f"📄 Papers in this domain ({len(matching)})", expanded=True):
+                for p in matching[:20]:
+                    st.markdown(f"- **{p.title}** ({p.year or 'N/A'})")
+        
+    except Exception as e:
+        st.error(f"Failed to load domain details: {e}")
 
 
-def _render_chunk_viewer(doc_id):
-    """Render chunk viewer for a paper with entity highlighting."""
-    st.markdown("---")
-    st.markdown("### 📦 Document Chunks")
-    
+def _render_chunks_list(chunks_data, metadata):
+    """Render a list of text chunks with entity highlighting."""
     try:
         from src.ui.components.entity_highlighter import (
             highlight_entities, 
-            extract_entities_from_chunk,
             create_legend
         )
-        
-        # Get chunks from GraphBuilder (uses Qdrant now)
-        gb = GraphBuilder()
-        chunks_data = gb.get_paper_chunks(doc_id)
-        
-        # Also get paper metadata for entity extraction
-        metadata = gb.get_paper_metadata(doc_id)
-        gb.close()
-        
-        if not chunks_data:
-            st.info("No chunks found for this paper")
-            return
-        
-        # Show legend
+        has_highlighter = True
+    except ImportError:
+        has_highlighter = False
+    
+    if has_highlighter:
         st.markdown(create_legend(), unsafe_allow_html=True)
-        
-        # Group by section
-        sections = {}
-        for chunk in chunks_data:
-            section = chunk.get("section") or "Unknown"
-            if section not in sections:
-                sections[section] = []
-            sections[section].append(chunk)
-        
-        # Prepare entities for highlighting (from metadata)
-        global_entities = {
-            "species": metadata.get("species", []) if metadata else [],
-            "locations": metadata.get("locations", []) if metadata else [],
-        }
-        
-        # Display chunks by section
-        for section, section_chunks in sections.items():
-            with st.expander(f"📑 {section} ({len(section_chunks)} chunks)", expanded=False):
-                for i, chunk in enumerate(section_chunks):
-                    # Metadata row
+    
+    global_entities = {
+        "species": metadata.get("species", []) if metadata else [],
+        "locations": metadata.get("locations", []) if metadata else [],
+    }
+    
+    # Group by section
+    sections = {}
+    for chunk in chunks_data:
+        section = chunk.get("section") or "General"
+        if section not in sections:
+            sections[section] = []
+        sections[section].append(chunk)
+    
+    for section, section_chunks in sections.items():
+        with st.expander(f"📑 {section} ({len(section_chunks)} chunks)", expanded=True):
+            for i, chunk in enumerate(section_chunks):
+                text = chunk.get("text", "")
+                word_count = chunk.get("word_count", len(text.split()))
+                page = chunk.get("page") or "N/A"
+                
+                st.markdown(f"**Chunk {i+1}** • {word_count} words • Page {page}")
+                
+                display_text = text[:800] + "..." if len(text) > 800 else text
+                
+                if has_highlighter:
+                    highlighted = highlight_entities(display_text, global_entities)
                     st.markdown(
-                        f"**Chunk {i+1}** • {chunk.get('word_count', 0)} words • "
-                        f"Page {chunk.get('page') or 'N/A'}"
-                    )
-                    
-                    # Highlight entities in text
-                    text = chunk.get("text", "")
-                    if len(text) > 500:
-                        text = text[:500] + "..."
-                    
-                    highlighted_text = highlight_entities(text, global_entities)
-                    
-                    # Render with HTML
-                    st.markdown(
-                        f'<div style="background:#f8f9fa;padding:0.75rem;border-radius:4px;'
-                        f'line-height:1.6;font-size:0.9rem">{highlighted_text}</div>',
+                        f'<div style="background:rgba(30,41,59,0.6);padding:0.75rem;border-radius:8px;'
+                        f'line-height:1.6;font-size:0.85rem;color:#cbd5e1;border:1px solid rgba(148,163,184,0.15)">'
+                        f'{highlighted}</div>',
                         unsafe_allow_html=True
                     )
+                else:
+                    st.text(display_text)
+                
+                if i < len(section_chunks) - 1:
+                    st.markdown("")
+
+
+def _render_species_evidence_chunks(gb, scientific_name, papers):
+    """Find and display text chunks that mention a specific species."""
+    if not papers:
+        st.info("No papers found for this species.")
+        return
+    
+    evidence_count = 0
+    
+    for paper in papers[:5]:  # Limit to 5 papers for performance
+        doc_id = paper["doc_id"]
+        title = paper.get("title", "Unknown")
+        
+        chunks = gb.get_paper_chunks(doc_id)
+        if not chunks:
+            continue
+        
+        # Filter chunks that mention the species
+        name_lower = scientific_name.lower()
+        matching_chunks = [
+            c for c in chunks
+            if name_lower in c.get("text", "").lower()
+        ]
+        
+        if matching_chunks:
+            with st.expander(f"📄 {title} ({len(matching_chunks)} mentions)", expanded=evidence_count == 0):
+                for i, chunk in enumerate(matching_chunks[:3]):
+                    text = chunk.get("text", "")
+                    # Highlight the species name
+                    import re
+                    highlighted = re.sub(
+                        re.escape(scientific_name),
+                        f'<mark style="background:#10b981;color:#0f172a;padding:0 3px;border-radius:3px">{scientific_name}</mark>',
+                        text[:600],
+                        flags=re.IGNORECASE
+                    )
                     
-                    if i < len(section_chunks) - 1:  # Divider except for last chunk
-                        st.markdown("---")
-                    
-    except Exception as e:
-        st.error(f"Failed to load chunks: {e}")
-        logger.exception("Chunk viewer error")
+                    st.markdown(
+                        f'<div style="background:rgba(30,41,59,0.6);padding:0.75rem;border-radius:8px;'
+                        f'line-height:1.6;font-size:0.85rem;color:#cbd5e1;border:1px solid rgba(148,163,184,0.15);'
+                        f'margin-bottom:0.5rem">{highlighted}</div>',
+                        unsafe_allow_html=True
+                    )
+                evidence_count += 1
+    
+    if evidence_count == 0:
+        st.info("No text chunks found mentioning this species. Chunks may not be indexed in Qdrant.")
+

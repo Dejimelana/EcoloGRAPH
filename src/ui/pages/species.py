@@ -23,14 +23,39 @@ def render():
     with col1:
         species = st.text_input(
             "Species name",
+            value=st.session_state.get("_species_lookup", ""),
             placeholder="e.g. Gadus morhua, Canis lupus, Quercus robur",
             label_visibility="collapsed",
         )
     with col2:
         search_btn = st.button("🔍 Look up", use_container_width=True)
 
-    if species and search_btn:
+    # --- Neo4j species browser ---
+    with st.expander("📂 Browse species from your database", expanded=not species):
+        neo4j_species = _get_neo4j_species()
+        if neo4j_species:
+            st.caption(f"{len(neo4j_species)} species extracted from your papers")
+            # Show in columns of clickable buttons
+            cols = st.columns(3)
+            for i, sp in enumerate(neo4j_species[:30]):
+                with cols[i % 3]:
+                    if st.button(
+                        f"🧬 {sp}",
+                        key=f"neo4j_sp_{i}",
+                        use_container_width=True
+                    ):
+                        st.session_state["_species_lookup"] = sp
+                        st.rerun()
+            if len(neo4j_species) > 30:
+                st.caption(f"... and {len(neo4j_species) - 30} more species")
+        else:
+            st.caption("No species found in Neo4j. Run ingestion first, or search GBIF directly above.")
+
+    if species:
+        # Always search, whether user hit Enter or clicked button
         _show_species_info(species)
+        if st.session_state.get("_species_lookup"):
+            st.session_state.pop("_species_lookup", None)
     elif not species:
         # Featured species showcase
         st.markdown("---")
@@ -52,6 +77,26 @@ def render():
                     f'</div>',
                     unsafe_allow_html=True,
                 )
+
+
+def _get_neo4j_species():
+    """Fetch species names from Neo4j for browsing."""
+    try:
+        from src.graph.graph_builder import GraphBuilder
+        graph = GraphBuilder()
+        query = """
+        MATCH (s:Species)
+        OPTIONAL MATCH (p:Paper)-[:MENTIONS]->(s)
+        RETURN s.scientific_name AS name, COUNT(DISTINCT p) AS papers
+        ORDER BY papers DESC
+        """
+        with graph._driver.session(database="neo4j") as session:
+            result = session.run(query)
+            species = [r["name"] for r in result if r["name"]]
+        graph.close()
+        return species
+    except Exception:
+        return []
 
 
 def _show_species_info(species_name):
@@ -93,8 +138,29 @@ def _render_overview(species_name):
                 match = resp.json()
 
                 if match.get("matchType") == "NONE":
-                    st.warning(f"No species found for **{species_name}**. Check the spelling.")
-                    return
+                    # Fallback: try as common/vernacular name via species/search
+                    resp_search = client.get(
+                        "https://api.gbif.org/v1/species/search",
+                        params={"q": species_name, "limit": 1, "rank": "SPECIES"},
+                    )
+                    if resp_search.status_code == 200:
+                        results = resp_search.json().get("results", [])
+                        if results:
+                            # Re-match using the canonical name found
+                            resolved = results[0]
+                            canonical_found = resolved.get("canonicalName") or resolved.get("species")
+                            if canonical_found:
+                                st.info(f"🔄 *\"{species_name}\"* resolved → **{canonical_found}**")
+                                resp2 = client.get(
+                                    "https://api.gbif.org/v1/species/match",
+                                    params={"name": canonical_found, "verbose": "true"},
+                                )
+                                if resp2.status_code == 200:
+                                    match = resp2.json()
+                    
+                    if match.get("matchType") == "NONE":
+                        st.warning(f"No species found for **{species_name}**. Try a different name or spelling.")
+                        return
 
                 species_key = match.get("usageKey")
 

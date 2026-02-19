@@ -153,6 +153,67 @@ class GBIFOccurrenceClient:
             logger.error(f"GBIF species match error: {e}")
             return None
     
+    def validate_species(self, name: str) -> dict | None:
+        """
+        Validate a species name against GBIF Backbone Taxonomy.
+        
+        Handles both scientific names and common/vernacular names.
+        GBIF's fuzzy matching resolves partial names, common names, and typos.
+        
+        Args:
+            name: Species name (scientific or common, e.g. "Gadus morhua" or "Atlantic cod")
+            
+        Returns:
+            Dict with canonical_name, rank, family, kingdom, matchType, taxon_key, confidence
+            or None if no match found.
+        """
+        self._rate_limit_wait()
+        
+        try:
+            # Try exact match first
+            response = self._client.get(
+                f"{GBIF_API_BASE}/species/match",
+                params={"name": name, "verbose": "true"}
+            )
+            
+            if response.status_code != 200:
+                return None
+            
+            data = response.json()
+            
+            match_type = data.get("matchType", "NONE")
+            if match_type == "NONE":
+                # Try as vernacular/common name via search
+                response2 = self._client.get(
+                    f"{GBIF_API_BASE}/species/search",
+                    params={"q": name, "limit": 1, "rank": "SPECIES"}
+                )
+                if response2.status_code == 200:
+                    results = response2.json().get("results", [])
+                    if results:
+                        data = results[0]
+                        match_type = "FUZZY"
+                    else:
+                        return None
+                else:
+                    return None
+            
+            confidence = data.get("confidence", 0)
+            
+            return {
+                "canonical_name": data.get("canonicalName") or data.get("species") or name,
+                "rank": data.get("rank", "UNKNOWN"),
+                "family": data.get("family", "-"),
+                "kingdom": data.get("kingdom", "-"),
+                "matchType": match_type,
+                "taxon_key": data.get("usageKey") or data.get("key"),
+                "confidence": confidence
+            }
+            
+        except Exception as e:
+            logger.error(f"GBIF validate_species error for '{name}': {e}")
+            return None
+    
     def get_occurrences(
         self,
         scientific_name: str | None = None,

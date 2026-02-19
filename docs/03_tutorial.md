@@ -1,13 +1,13 @@
-# EcoloGRAPH — User Tutorial
+# EcoloGRAPH — User Tutorial (v1.5.0)
 
-> From zero to running the full system: ingestion, search, species lookup, and hypothesis generation.
+> From zero to running the full system: ingestion, search, species lookup, graph exploration, and hypothesis generation.
 
 ---
 
 ## Prerequisites
 
 - Python 3.11+ with the `ecolograph` conda environment
-- LM Studio or Ollama running locally (for entity extraction and agent)
+- **Ollama** running locally (for entity extraction and agent) — [ollama.ai](https://ollama.ai/)
 - Docker Desktop (for Qdrant and Neo4j)
 - PDFs in `data/raw/` directory
 
@@ -24,28 +24,48 @@ docker run -d --name neo4j -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/passwor
 
 > To stop/restart later: `docker start qdrant neo4j`
 
+### Starting Ollama
+
+```bash
+# Pull the recommended model
+ollama pull qwen3:8b
+
+# Ollama starts automatically on http://localhost:11434/v1
+```
+
 ---
 
 ## 1. Setting Up
 
-### 1.1 API Key
+### 1.1 Environment Configuration
 
-Place your LM Studio API key in `config/api-key`:
+Configure `.env` with your Ollama settings:
 
+```env
+LLM_PROVIDER=local
+LOCAL_LLM_BASE_URL=http://localhost:11434/v1
+INGESTION_LLM_MODEL=qwen3:8b
+REASONING_LLM_MODEL=qwen3:8b
 ```
-sk-lm-your-key-here
-```
-
-This is auto-loaded by the system — no `.env` file needed.
 
 ### 1.2 Verify Installation
 
 ```bash
 conda activate ecolograph
-python -m pytest tests/test_integration.py -v
+python -m pytest tests/ -v
 ```
 
-Expected: **33/33 tests passing**.
+Expected: **58/58 tests passing**.
+
+### 1.3 Diagnostics
+
+```bash
+# Quick test of Ollama connection + agent pipeline
+python scripts/diagnose_agent.py
+
+# Compare different models on extraction quality
+python scripts/test_ollama_models.py
+```
 
 ---
 
@@ -80,6 +100,9 @@ python scripts/ingest.py data/raw/ --skip-graph
 
 ```bash
 python scripts/ingest.py data/raw/
+
+# Custom: specific model, with thinking, higher timeout
+python scripts/ingest.py data/raw/ --model qwen3:14b --thinking --max-tokens 4096 --timeout 180
 ```
 
 ### 2.5 Pipeline Output
@@ -120,25 +143,68 @@ The landing page shows:
 - **Domain distribution**: bar chart of papers per domain
 - **Architecture overview**: all system modules
 
-### 3.3 Search (🔍)
+### 3.3 Graph Explorer (🕸️)
 
+The interactive knowledge graph visualizer shows papers, species, and domains as nodes.
+
+1. Select a **layout** (Barnes-Hut, Force Atlas, Hierarchical, etc.)
+2. Choose **data source**: Neo4j or PaperIndex
+3. Adjust **max nodes** with the slider
+
+**Node interaction**:
+- Click any node → **scroll down** to see the details panel
+- **Paper nodes** show: title, year, abstract, species, locations, and source chunks with entity highlighting
+- **Species nodes** show: papers mentioning the species, co-occurring species, and evidence chunks where the species appears (highlighted in green)
+- **Domain nodes** show: papers classified in that domain
+
+**Species co-occurrence**:
+- Yellow `co-occurs (N)` edges link species that appear in the same papers
+- Edge thickness is proportional to the number of shared papers
+
+### 3.4 Search (🔍)
+
+Two tabs: **Papers** and **Species**.
+
+**Papers tab**:
 1. Type a query: *"microplastics impact on marine organisms"*
 2. Optionally filter by domain (dropdown)
-3. Results show as cards with:
-   - Title, score (BM25 + semantic combined)
-   - Domain badge
-   - Text snippet
+3. Results show as cards with title, score, domain badge, and snippet
+4. Click 📖 to navigate to the paper's detail page
 
-### 3.4 Species Explorer (🐟)
+**Species tab**:
+1. Search by **scientific name** or **common name**: *"cod"*, *"wolf"*, *"Quercus"*
+2. Results show matching species with paper count and family badge
+3. Click any **📄 paper title** to navigate to that paper
 
-1. Enter a scientific name: *"Gadus morhua"*
-2. Click **Look up**
-3. Three tabs appear:
-   - **FishBase**: biology (max length, weight, trophic level, habitat)
-   - **GBIF**: distribution (countries, year range, occurrence map)
-   - **IUCN**: conservation status (threat category, population trend, threats)
+### 3.5 Species Explorer (🧬)
 
-### 3.5 Domain Lab (🔬)
+1. Enter a scientific or common name: *"Gadus morhua"*, *"cod"*, *"springtail"*
+2. The search triggers automatically on Enter
+3. Common names resolve automatically: *"cod" → Gadus morhua*
+4. Three tabs appear:
+   - **Overview & Taxonomy**: full taxonomy hierarchy, common names, conservation status
+   - **Distribution Map**: GBIF occurrence records on a world map
+   - **Occurrence Records**: downloadable table of georeferenced records
+
+### 3.6 Taxonomy Explorer (✅)
+
+Three sub-tabs:
+
+**Database Species**: Browse all species extracted from your papers (Neo4j):
+- Filter by minimum paper count or name search
+- Download as CSV for external analysis
+
+**Name Resolver**: Validate any species or common name against GBIF:
+1. Enter a name: *"springtail"*, *"Atlantic cod"*, *"Quercus robur"*
+2. See resolved canonical name, family, kingdom, rank, and confidence score
+3. One-click link to GBIF species page
+
+**Taxonomy Stats**: Visualize your corpus:
+- Family distribution bar chart
+- Validation status breakdown
+- Paper count per species
+
+### 3.7 Domain Lab (🔬)
 
 Three sub-tabs:
 
@@ -161,8 +227,8 @@ python scripts/chat_demo.py
 
 ```
 🌿 EcoloGRAPH Chat (beta)
-🤖 Model: qwen3:14b (auto-detected)
-🔧 Tools: 7 available
+🤖 Model: qwen3:8b (auto-detected)
+🔧 Tools: 8 available
 
 You: What species are most studied in coral reef ecology?
 🧭 Route: research
@@ -183,9 +249,10 @@ You: /quit
 ### 5.1 Build a Species Profile
 
 1. Ingest papers mentioning the species
-2. Open Species Explorer → enter name
-3. FishBase tab for biology, GBIF for distribution, IUCN for conservation
-4. Use Domain Lab to find which domains study this species
+2. Open Species Explorer → enter name (scientific or common)
+3. GBIF tab for distribution, Overview for taxonomy and conservation
+4. Use Graph Explorer to see co-occurring species
+5. Use Taxonomy Explorer to validate taxonomic information
 
 ### 5.2 Cross-Domain Literature Review
 
@@ -194,7 +261,13 @@ You: /quit
 3. Domain Lab → Generate Hypotheses → get research ideas
 4. Search → find papers bridging both domains
 
-### 5.3 Classify Unknown Abstracts
+### 5.3 Explore Species Interactions
+
+1. Open Graph Explorer → look for yellow co-occurrence edges
+2. Click a species node → scroll down to see evidence chunks
+3. Use Taxonomy Explorer → Name Resolver to validate species names
+
+### 5.4 Classify Unknown Abstracts
 
 1. Domain Lab → Classify Text
 2. Paste abstract
@@ -214,11 +287,13 @@ Arguments:
   path              PDF file or directory
 
 Options:
+  --model <name>    Ollama model for extraction (default: from config)
+  --thinking        Enable thinking mode (slower, better quality)
+  --max-tokens <n>  Max tokens per LLM response (default: 2048)
+  --timeout <s>     LLM request timeout (default: 120s)
   --skip-extract    Skip LLM entity extraction
   --skip-graph      Skip Neo4j graph building
   --skip-vectors    Skip Qdrant vector indexing
-  --chunk-size N    Chunk size in chars (default: 1000)
-  --chunk-overlap N Overlap between chunks (default: 200)
 ```
 
 ### Chat Demo
@@ -227,9 +302,18 @@ Options:
 python scripts/chat_demo.py [OPTIONS]
 
 Options:
-  --model MODEL     LLM model name (default: auto-detect)
-  --base-url URL    LLM API URL (default: http://localhost:1234/v1)
+  --model MODEL     LLM model name (default: auto-detect from config)
+  --base-url URL    LLM API URL (default: http://localhost:11434/v1)
   --temperature T   Sampling temperature (default: 0.1)
+```
+
+### Diagnostics
+
+```
+python scripts/diagnose_agent.py    # Test Ollama + agent pipeline
+python scripts/test_ollama_models.py # Compare models
+python scripts/rebuild_fts.py       # Rebuild corrupted FTS5 index
+python scripts/verify_setup.py      # Check installation
 ```
 
 ### Streamlit UI
@@ -241,6 +325,7 @@ streamlit run scripts/app.py
 ### Tests
 
 ```
-python -m pytest tests/test_integration.py -v    # All 33 tests
+python -m pytest tests/ -v                       # All 58 tests
+python -m pytest tests/test_integration.py -v     # Integration tests only
 python -m pytest tests/ -k "classify"             # Filter by name
 ```

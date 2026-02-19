@@ -48,9 +48,11 @@ env/
 data/raw/*
 data/processed/*
 data/cache/*
+data/chat_history/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/cache/.gitkeep
+!data/chat_history/.gitkeep
 Exploring Agent Frameworks For EcoloGRAPH.md
 FIX_GRAPH_OSCILLATION.txt
 ingestion.logfile
@@ -60,8 +62,9 @@ ingestion.logfile
 *.db-shm
 *.db-wal
 
-# Temp files
+# Temp and backup files
 temp_*.py
+*_old.py
 
 # Neo4j data
 neo4j_data/

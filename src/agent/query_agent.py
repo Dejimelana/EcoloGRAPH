@@ -37,9 +37,9 @@ logger = logging.getLogger(__name__)
 # Model Auto-Detection
 # ============================================================
 
-def detect_loaded_model(base_url: str = "http://localhost:1234/v1") -> dict:
+def detect_loaded_model(base_url: str = "http://localhost:11434/v1") -> dict:
     """
-    Query LM Studio / Ollama to detect the currently loaded model.
+    Query Ollama to detect the currently loaded model.
     
     Returns:
         dict with 'id', 'object', 'owned_by' or empty dict if no model loaded.
@@ -61,7 +61,7 @@ def detect_loaded_model(base_url: str = "http://localhost:1234/v1") -> dict:
     except httpx.ConnectError:
         raise ConnectionError(
             f"Cannot connect to LLM server at {base_url}. "
-            "Make sure LM Studio or Ollama is running."
+            "Make sure Ollama is running (ollama serve)."
         )
     except Exception as e:
         logger.warning(f"Could not detect model: {e}")
@@ -101,10 +101,13 @@ STRATEGY_ROUTER_PROMPT = """Classify this research query into ONE strategy:
 Respond with ONLY one word: search, graph, external, inference, or full."""
 
 CHAT_SYSTEM = """You are EcoloGRAPH, a scientific research assistant specialized in ecology.
-Answer the user's question directly from your knowledge.
-Be precise with scientific terminology. Answer in the user's language.
-If the question requires searching specific papers or databases, tell the user 
-you can do that — they just need to ask you to search."""
+You have access to a database of indexed scientific papers, a Neo4j knowledge graph,
+and 8 tools: search_papers, search_by_domain, query_graph, classify_text,
+get_species_info, find_cross_domain_links, generate_hypotheses, search_related_papers.
+
+Answer the user's question. If data from your database would help, suggest using your tools.
+Be precise with scientific terminology.
+Always respond in the same language the user writes in."""
 
 AGENT_SYSTEM = """You are EcoloGRAPH, a scientific research assistant with access to tools.
 
@@ -261,7 +264,21 @@ class QueryAgent:
         
         lower = user_msg.lower().strip()
         
-        # ── Meta / greeting detection (no LLM needed) ──
+        # ── Follow-up detection (if conversation has prior turns) ──
+        if len(state["messages"]) > 1:
+            follow_ups = [
+                "dímelo", "dime", "explica", "explain", "en castellano",
+                "en español", "in spanish", "in english", "en inglés",
+                "em português", "in portuguese", "en français",
+                "más detalle", "more detail", "profundiza", "elaborate",
+                "por qué", "why", "cómo", "how", "ejemplo", "example",
+                "sí", "yes", "continúa", "continue", "go on",
+                "por favor", "please", "sim", "oui",
+            ]
+            if any(p in lower for p in follow_ups):
+                return {"intent": "research"}
+        
+        # ── Meta / greeting detection (only for first message) ──
         meta_triggers = [
             "hola", "hello", "hi ", "hey", "buenos", "buenas",
             "/help", "/info", "/quit", "qué modelo", "what model",
@@ -269,9 +286,10 @@ class QueryAgent:
             "qué puedes", "what can you", "ayuda", "help",
             "gracias", "thanks", "thank you", "adiós", "goodbye",
         ]
-        for trigger in meta_triggers:
-            if lower.startswith(trigger) or trigger in lower:
-                return {"intent": "meta"}
+        if len(state["messages"]) <= 1:
+            for trigger in meta_triggers:
+                if lower.startswith(trigger) or trigger in lower:
+                    return {"intent": "meta"}
         
         # ── Research detection (skip LLM for obvious queries) ──
         # Questions with scientific keywords → research
@@ -287,6 +305,11 @@ class QueryAgent:
             "how does", "cómo", "what is the effect", "cuál es",
             "compare", "comparar", "analyze", "analizar", "summarize",
             "related to", "connection between", "relationship between",
+            # Multilingual research triggers
+            "qué sabes", "dime sobre", "dime que", "información sobre",
+            "basándote", "bibliografía", "base de datos", "tu base",
+            "o que você sabe", "informação sobre", "pesquisar",
+            "remote sensing", "machine learning", "deep learning",
         ]
         for pattern in research_patterns:
             if pattern in lower:
@@ -479,10 +502,25 @@ class QueryAgent:
     # Public API
     # --------------------------------------------------------
     
-    def ask(self, question: str) -> str:
+    def _build_messages(
+        self, question: str, history: list[dict] = None
+    ) -> list[BaseMessage]:
+        """Convert chat history + current question into LangChain messages."""
+        messages = []
+        if history:
+            # Include last 10 turns for context (avoid token overflow)
+            for msg in history[-10:]:
+                if msg["role"] == "user":
+                    messages.append(HumanMessage(content=msg["content"]))
+                elif msg["role"] == "assistant":
+                    messages.append(AIMessage(content=msg["content"]))
+        messages.append(HumanMessage(content=question))
+        return messages
+    
+    def ask(self, question: str, history: list[dict] = None) -> str:
         """Ask a question and get an answer."""
         initial_state: AgentState = {
-            "messages": [HumanMessage(content=question)],
+            "messages": self._build_messages(question, history),
             "intent": "",
         }
         
@@ -502,13 +540,13 @@ class QueryAgent:
             logger.error(f"Agent error: {e}")
             return f"Error: {e}"
     
-    def ask_streaming(self, question: str):
+    def ask_streaming(self, question: str, history: list[dict] = None):
         """
         Ask with streaming. Yields (event_type, content) tuples.
         event_type: 'routing', 'tool_call', 'tool_result', 'answer', 'error'
         """
         initial_state: AgentState = {
-            "messages": [HumanMessage(content=question)],
+            "messages": self._build_messages(question, history),
             "intent": "",
         }
         

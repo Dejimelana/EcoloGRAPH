@@ -12,16 +12,125 @@ def render():
     inject_css()
 
     st.markdown(
-        '<div class="hero-title">🔍 Paper Search</div>'
-        '<div class="hero-subtitle">Hybrid BM25 + Semantic search across your knowledge base</div>',
+        '<div class="hero-title">🔍 Search</div>'
+        '<div class="hero-subtitle">Search papers, species, and knowledge across your database</div>',
         unsafe_allow_html=True,
     )
+
+    # --- Search mode tabs ---
+    tab_papers, tab_species = st.tabs(["📄 Papers", "🧬 Species"])
+
+    with tab_papers:
+        _render_paper_search()
+
+    with tab_species:
+        _render_species_search()
+
+
+def _render_species_search():
+    """Search species in Neo4j knowledge graph."""
+    query = st.text_input(
+        "Species search",
+        placeholder="e.g. Quercus, Pinus, cod, springtail, wolf",
+        label_visibility="collapsed",
+        key="species_search_input",
+    )
+
+    if not query:
+        st.markdown(
+            '<div class="glass-card" style="text-align:center;padding:3rem">'
+            '<div style="font-size:3rem;margin-bottom:1rem">🧬</div>'
+            '<div style="color:#94a3b8">Search by scientific or common name (Neo4j)</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    try:
+        from src.graph.graph_builder import GraphBuilder
+        graph = GraphBuilder()
+
+        # Search in both scientific_name AND common_names
+        cypher = """
+        MATCH (s:Species)
+        WHERE toLower(s.scientific_name) CONTAINS toLower($query)
+           OR toLower(COALESCE(s.common_names, '')) CONTAINS toLower($query)
+        OPTIONAL MATCH (p:Paper)-[:MENTIONS]->(s)
+        RETURN
+            s.scientific_name AS species,
+            s.common_names AS common_name,
+            s.family AS family,
+            COUNT(DISTINCT p) AS papers,
+            COLLECT(DISTINCT {title: p.title, doc_id: p.doc_id})[0..5] AS paper_list
+        ORDER BY papers DESC
+        LIMIT 50
+        """
+
+        with graph._driver.session(database="neo4j") as session:
+            result = session.run(cypher, {"query": query})
+            species_list = [dict(r) for r in result]
+
+        graph.close()
+
+        if not species_list:
+            st.warning(f'No species matching "{query}" found in Neo4j.')
+            return
+
+        st.markdown(f'**{len(species_list)} species** matching *"{query}"*')
+        st.markdown("---")
+
+        for i, sp in enumerate(species_list):
+            common = sp.get("common_name") or ""
+            family = sp.get("family") or ""
+            papers_count = sp.get("papers", 0)
+            paper_list = sp.get("paper_list", [])
+
+            header_parts = [
+                f'<span style="color:#10b981;font-weight:700;font-style:italic">{sp["species"]}</span>'
+            ]
+            if common:
+                header_parts.append(f'<span style="color:#94a3b8"> — {common}</span>')
+
+            badges = ""
+            if family:
+                badges += f'<span class="domain-badge secondary">{family}</span>'
+            badges += f'<span class="domain-badge">{papers_count} paper{"s" if papers_count != 1 else ""}</span>'
+
+            st.markdown(
+                f'<div class="glass-card" style="padding:0.8rem 1rem;margin-bottom:0.4rem">'
+                f'<div>{"".join(header_parts)}</div>'
+                f'<div style="display:flex;gap:0.4rem;margin-top:0.3rem">{badges}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+            # Clickable paper links
+            if paper_list:
+                for j, paper in enumerate(paper_list):
+                    if paper and paper.get("title"):
+                        if st.button(
+                            f"📄 {paper['title'][:60]}{'...' if len(paper.get('title','')) > 60 else ''}",
+                            key=f"sp_{i}_paper_{j}",
+                            use_container_width=True,
+                        ):
+                            st.session_state.selected_paper_id = paper.get("doc_id")
+                            st.session_state.nav_page = "📄 Papers"
+                            st.rerun()
+
+    except Exception as e:
+        st.error(f"Species search failed: {e}")
+        st.caption("Make sure Neo4j is running and papers have been ingested.")
+
+
+def _render_paper_search():
+    """Render the paper search interface."""
 
     # --- Controls ---
     query = st.text_input(
         "Search query",
         placeholder="e.g. microplastics impact on marine fish populations",
         label_visibility="collapsed",
+        key="paper_search_input",
     )
 
     col_opts1, col_opts2 = st.columns(2)
