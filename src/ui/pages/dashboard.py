@@ -265,27 +265,27 @@ def _render_mini_graph():
         is_hierarchical = layout == "Hierarchical"
 
         # Physics tuning (hidden for hierarchical)
-        gravity = -26000
-        spring_len = 150
+        gravity = -50000
+        spring_len = 230
         spring_k = 0.04
-        damping_val = 0.09
-        central_g = 0.005
-        node_dist = 120
+        damping_val = 0.12
+        central_g = 0.01
+        node_dist = 150
 
         if not is_hierarchical:
             with st.expander("⚙️ Physics Settings", expanded=False):
                 pc1, pc2 = st.columns(2)
                 with pc1:
                     gravity = st.slider(
-                        "Gravity", -80000, -1000, -26000, 1000,
+                        "Gravity", -80000, -1000, -50000, 1000,
                         key="dash_gravity",
                     )
                     spring_len = st.slider(
-                        "Spring Length", 50, 400, 150, 10,
+                        "Spring Length", 50, 400, 230, 10,
                         key="dash_spring_len",
                     )
                     damping_val = st.slider(
-                        "Damping", 0.01, 0.50, 0.09, 0.01,
+                        "Damping", 0.01, 0.50, 0.12, 0.01,
                         key="dash_damping",
                     )
                 with pc2:
@@ -294,11 +294,11 @@ def _render_mini_graph():
                         key="dash_spring_k",
                     )
                     central_g = st.slider(
-                        "Central Gravity", 0.0, 1.0, 0.005, 0.005,
+                        "Central Gravity", 0.0, 1.0, 0.01, 0.005,
                         key="dash_central_g",
                     )
                     node_dist = st.slider(
-                        "Node Distance", 50, 300, 120, 10,
+                        "Node Distance", 50, 300, 150, 10,
                         key="dash_node_dist",
                     )
 
@@ -381,7 +381,7 @@ def _render_mini_graph():
 
         # Navigation button
         if st.button("🕸️ Open Full Graph Explorer", use_container_width=True):
-            st.session_state.nav_page = "🕸️ Graph Explorer"
+            st.session_state.nav_page = "🕸️ Graph"
             st.rerun()
 
     except Exception as e:
@@ -404,11 +404,11 @@ def _check_services():
     except Exception:
         services.append(("SQLite Index", False))
 
-    # Qdrant
+    # Qdrant — lightweight HTTP ping (avoids loading embedding model)
     try:
-        from src.retrieval.vector_store import VectorStore
-        VectorStore()
-        services.append(("Qdrant Vector DB", True))
+        import urllib.request
+        req = urllib.request.urlopen("http://localhost:6333/healthz", timeout=2)
+        services.append(("Qdrant Vector DB", req.status == 200))
     except Exception:
         services.append(("Qdrant Vector DB", False))
 
