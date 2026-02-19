@@ -161,13 +161,14 @@ def _get_agent():
         _load_api_key_file()
 
         settings = get_settings()
-        base_url = settings.llm.base_url  # from .env or default
+        base_url = settings.llm.base_url
+        model = settings.llm.reasoning_model  # Use reasoning model for chat/agent
 
         import os
-        api_key = os.environ.get("OPENAI_API_KEY", "lm-studio")
+        api_key = os.environ.get("OPENAI_API_KEY", "ollama")
 
         from src.agent import QueryAgent
-        agent = QueryAgent(api_key=api_key, base_url=base_url)
+        agent = QueryAgent(model=model, api_key=api_key, base_url=base_url)
         # Verify connection
         agent.get_info()
         return agent

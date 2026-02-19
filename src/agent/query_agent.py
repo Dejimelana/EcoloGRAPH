@@ -445,7 +445,7 @@ class QueryAgent:
         tools = get_tools_for_strategy(strategy)
         
         # Create LLM instance with limited tools
-        llm_with_subset = self.llm.bind_tools(tools)
+        llm_with_subset = self.llm_fast.bind_tools(tools)
         
         # Build tool descriptions for this subset only
         tool_desc_lines = ["Available tools:"]

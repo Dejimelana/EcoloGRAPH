@@ -28,6 +28,7 @@ from src.ingestion.chunker import DocumentChunker
 from src.extraction.domain_classifier import DomainClassifier
 from src.search.paper_index import PaperIndex, IndexedPaper
 from src.core.config import _load_api_key_file
+from src.core.lm_studio_manager import LMStudioManager
 
 # Load API key from config/api-key before any LLM calls
 _load_api_key_file()
@@ -245,6 +246,11 @@ def ingest(
     skip_vectors: bool = False,
     chunk_size: int = 1000,
     chunk_overlap: int = 200,
+    restart_interval: int = 0,
+    model: str | None = None,
+    thinking: bool = False,
+    max_tokens: int = 2048,
+    timeout: float = 120.0,
 ):
     """Run the full ingestion pipeline."""
     
@@ -299,11 +305,43 @@ def ingest(
         try:
             from src.extraction.entity_extractor import EntityExtractor
             from src.extraction.citation_extractor import CitationExtractor
-            entity_extractor = EntityExtractor()
-            citation_extractor = CitationExtractor()  # NEW: for citation extraction
-            logger.info("✅ Entity & citation extractors initialized (LLM required)")
+            from src.core.llm_client import LLMClient
+            
+            # Build LLM client with user-specified parameters
+            llm_kwargs = {"role": "ingestion", "timeout": timeout}
+            if model:
+                llm_kwargs["model"] = model
+            llm_kwargs["max_tokens"] = max_tokens
+            llm_client = LLMClient(**llm_kwargs)
+            
+            entity_extractor = EntityExtractor(llm_client=llm_client)
+            citation_extractor = CitationExtractor(llm_client=llm_client)
+            
+            # Configure thinking mode
+            if not thinking:
+                logger.info("🧠 Thinking mode: OFF (fast extraction, /no_think)")
+            else:
+                logger.info("🧠 Thinking mode: ON (slower but may improve quality)")
+                # Remove /no_think from system prompt if thinking is enabled
+                if hasattr(entity_extractor, 'system_prompt') and '/no_think' in entity_extractor.system_prompt:
+                    entity_extractor.system_prompt = entity_extractor.system_prompt.replace('/no_think', '').strip()
+            
+            logger.info(
+                f"✅ Extractors initialized: model={llm_client.model}, "
+                f"max_tokens={max_tokens}, timeout={timeout}s"
+            )
         except Exception as e:
             logger.warning(f"⚠️  Entity extractor not available: {e}")
+    
+    # Initialize LM Studio manager for periodic restarts
+    lm_studio_manager = None
+    if not skip_extract and restart_interval > 0:
+        try:
+            lm_studio_manager = LMStudioManager()
+            logger.info(f"✓ LM Studio manager initialized (restart every {restart_interval} papers)")
+        except Exception as e:
+            logger.warning(f"Could not initialize LM Studio manager: {e}")
+            logger.warning(f"Periodic restarts disabled")
     
     # Process each PDF
     total_chunks = 0
@@ -311,6 +349,22 @@ def ingest(
     failed = 0
     
     for i, pdf_path in enumerate(pdf_paths, 1):
+        # Periodic LM Studio restart to prevent memory leaks
+        if lm_studio_manager and restart_interval > 0 and i > 1 and (i - 1) % restart_interval == 0:
+            logger.info(f"\n{'='*60}")
+            logger.info(f"🔄 RESTARTING LM STUDIO (processed {i-1} papers)")
+            logger.info(f"   Reason: Prevent memory leak accumulation")
+            logger.info(f"{'='*60}")
+            
+            try:
+                if lm_studio_manager.restart():
+                    logger.info("✅ LM Studio restarted successfully")
+                else:
+                    logger.warning("⚠️  LM Studio restart failed, continuing anyway...")
+            except Exception as e:
+                logger.error(f"❌ LM Studio restart error: {e}")
+                logger.warning("Continuing without restart...")
+        
         t0 = time.time()
         logger.info(f"\n{'='*60}")
         logger.info(f"[{i}/{len(pdf_paths)}] Processing: {pdf_path.name}")
@@ -499,8 +553,39 @@ Examples:
         "--chunk-overlap", type=int, default=200,
         help="Overlap between chunks (default: 200)"
     )
+    parser.add_argument(
+        "--restart-interval",
+        type=int,
+        default=20,
+        help="Restart LM Studio every N papers to prevent memory leaks (0 = disabled, default: 20)"
+    )
+    
+    # LLM configuration
+    parser.add_argument(
+        "--model", type=str, default=None,
+        help="Ollama model for ingestion (default: from config, e.g. qwen3:8b)"
+    )
+    parser.add_argument(
+        "--thinking", action="store_true", default=False,
+        help="Enable thinking mode (slower, better reasoning for ambiguous entities)"
+    )
+    parser.add_argument(
+        "--no-thinking", action="store_true", default=False,
+        help="Explicitly disable thinking mode (fast JSON extraction, default)"
+    )
+    parser.add_argument(
+        "--max-tokens", type=int, default=2048,
+        help="Max tokens per LLM response (default: 2048)"
+    )
+    parser.add_argument(
+        "--timeout", type=float, default=120.0,
+        help="LLM request timeout in seconds (default: 120)"
+    )
     
     args = parser.parse_args()
+    
+    # Resolve thinking flag
+    thinking = args.thinking and not args.no_thinking
     
     ingest(
         input_path=args.input_path,
@@ -509,6 +594,11 @@ Examples:
         skip_vectors=args.skip_vectors,
         chunk_size=args.chunk_size,
         chunk_overlap=args.chunk_overlap,
+        restart_interval=args.restart_interval,
+        model=args.model,
+        thinking=thinking,
+        max_tokens=args.max_tokens,
+        timeout=args.timeout,
     )
 
 

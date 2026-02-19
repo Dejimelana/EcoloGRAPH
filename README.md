@@ -4,7 +4,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.4.0-green.svg)]()
+[![Version](https://img.shields.io/badge/version-1.5.0-green.svg)]()
 
 ---
 
@@ -12,26 +12,31 @@
 
 EcoloGRAPH is a **Graph RAG (Retrieval-Augmented Generation) system** designed specifically for ecological and environmental research. It transforms PDF scientific publications into a structured, queryable knowledge base where every entity is traceable to its exact source (paper, page, paragraph).
 
-### 🎯 Key Features
+### ✨ Key Features (v1.5.0)
 
-- **🌍 43 Scientific Domains** — Automatic multi-label classification with weighted scoring (ecology, marine biology, climate science, machine learning, and more)
-- **🕸️ Knowledge Graph** — Neo4j graph database for species, measurements, locations, and ecological relationships
-- **🔍 Hybrid Search** — SQLite BM25 + Qdrant semantic embeddings + intelligent reranking
-- **📊 Graph Analytics** — NetworkX community detection, centrality analysis, interactive concept maps
-- **🧠 Cross-Domain Inference** — Automatic hypothesis generation from multi-domain connections
-- **🤖 Interactive Agent** — LangGraph-powered agent with 8 specialized tools for intelligent querying
-- **🐟 Species Enrichment** — Integration with FishBase, GBIF, and IUCN Red List APIs
-- **💻 100% Local** — Run entirely on your machine with LM Studio or Ollama (no API costs)
-- **🎨 Modern UI** — Beautiful Streamlit dashboard with dark/light themes and glassmorphism design
+- **🧠 Multi-Domain Knowledge Graph**: Classifies papers across **43 scientific domains** and builds a rich Neo4j graph.
+- **🧬 Dual-Prompt Extraction**: Ecological + generic scientific prompts with intelligent fallback.
+- **📖 Citation Network**: Extracts references and builds `Paper` → `CITES` → `Citation` relationships.
+- **🛡️ Robust Ingestion Pipeline**:
+  - **Configurable LLM**: Choose model, thinking mode, tokens, and timeout via CLI flags.
+  - **Smart Chunking**: Section-aware hybrid chunking for optimal retrieval.
+  - **Auto-Restart**: Built-in mitigation for LLM memory leaks.
+- **🔍 Hybrid Search Engine**: Combines **Qdrant** (semantic) + **SQLite FTS5** (keyword) + reranking.
+- **🕸️ Interactive Graph Explorer**: 4 visualization modes including Connected Papers-style explorer.
+- **🧠 Cross-Domain Inference**: Automatic hypothesis generation from multi-domain connections.
+- **🤖 Interactive Agent**: LangGraph-powered agent with 8 specialized tools.
+- **🐟 Species Enrichment**: FishBase, GBIF, and IUCN Red List API integration.
+- **💻 100% Local**: Runs on Ollama (recommended) or any OpenAI-compatible API — no cloud costs.
+- **🎨 Modern UI**: Streamlit dashboard with dark/light themes and glassmorphism design.
 
-### 🆕 Recent Improvements (v1.4.0)
+### 🆕 Recent Improvements (v1.5.0)
 
-- **Paper-Based Entity Extraction** — Redesigned from chunk-by-chunk to paper-level processing with 70% fewer LLM calls
-- **LM Studio Auto-Restart** — Automatic recovery from context overflow crashes
-- **Improved Metadata** — Enhanced PyMuPDF extraction for titles, abstracts, and publication years
-- **Query Tools** — New `query_chunks_lite.py` for exploring ingested data without UI
-- **Token Validation** — Prevents context overflow with automatic batching for large papers
-- **Cross-Chunk Resolution** — Resolves entity references across chunks ("the species" → actual name)
+- **Ollama Migration** — Primary LLM backend, replacing LM Studio. Full Qwen3 thinking model support.
+- **Dual-Model Architecture** — Separate models for ingestion (fast, `/no_think`) and reasoning (deep, with thinking).
+- **CLI Ingestion Params** — `--model`, `--thinking`, `--max-tokens`, `--timeout` for full control.
+- **Qwen3 Compatibility** — Handles Ollama's `reasoning` field, strips `<think>` tags, configurable thinking mode.
+- **Diagnostic Tools** — `diagnose_agent.py`, `test_ollama_models.py` for troubleshooting.
+- **Testing Guide** — Component-by-component verification documentation (`docs/06_testing_guide.md`).
 
 ---
 
@@ -134,7 +139,8 @@ docker run -d --name qdrant -p 6333:6333 qdrant/qdrant
 docker run -d --name neo4j -p 7474:7474 -p 7687:7687 \
     -e NEO4J_AUTH=neo4j/password neo4j
 
-# Start your LLM server (see LLM Connection Guide below)
+# Start Ollama (see LLM Connection Guide below)
+ollama pull qwen3:8b
 
 # Full pipeline
 python scripts/ingest.py data/raw/
@@ -146,8 +152,22 @@ streamlit run scripts/app.py
 Place PDF files in `data/raw/` and run the ingestion pipeline:
 
 ```bash
+# Default: uses model from config, thinking OFF, 2048 max tokens
 python scripts/ingest.py data/raw/
+
+# Custom: specific model, with thinking, higher timeout
+python scripts/ingest.py data/raw/ --model qwen3:14b --thinking --max-tokens 4096 --timeout 180
 ```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--model` | config (qwen3:8b) | Ollama model for extraction |
+| `--thinking` | OFF | Enable thinking mode (slower, better quality) |
+| `--max-tokens` | 2048 | Max tokens per LLM response |
+| `--timeout` | 120s | LLM request timeout |
+| `--skip-extract` | OFF | Skip LLM extraction |
+| `--skip-graph` | OFF | Skip Neo4j |
+| `--skip-vectors` | OFF | Skip Qdrant |
 
 The pipeline will:
 1. ✅ Parse PDFs (Docling + PyMuPDF fallback)
@@ -170,49 +190,53 @@ Open `http://localhost:8501` in your browser.
 
 ## 🤖 Connecting an LLM
 
-EcoloGRAPH uses a local LLM for two functions:
+EcoloGRAPH uses [Ollama](https://ollama.ai/) as its local LLM backend with a **dual-model architecture**:
 
-1. **Entity extraction** during ingestion (parsing species, measurements, locations from text)
-2. **Chat agent** for interactive querying (the LangGraph agent with 8 tools)
+| Role | Purpose | When | Config Variable |
+|------|---------|------|----------------|
+| **Ingestion** | Entity extraction from PDFs | `python scripts/ingest.py` | `INGESTION_LLM_MODEL` |
+| **Reasoning** | Chat agent, graph queries | Streamlit chat | `REASONING_LLM_MODEL` |
 
-### Option A: LM Studio (Recommended for Windows)
+### Installing Ollama
 
-1. Download [LM Studio](https://lmstudio.ai/)
-2. Load a model (recommended: **Qwen2.5 7B** or **Mistral 7B Instruct**)
-3. Start the local server (default: `http://localhost:1234/v1`)
-4. Configure `.env`:
+1. Download and install from [ollama.ai](https://ollama.ai/) (Windows, Linux, Mac)
+2. Pull the recommended model for your GPU:
 
-```env
-LLM_PROVIDER=local
-LOCAL_LLM_MODEL=auto
-LOCAL_LLM_BASE_URL=http://localhost:1234/v1
-```
+### Choosing a Model
 
-> **Note:** `auto` will auto-detect whatever model is loaded in LM Studio.
+| GPU VRAM | Recommended Model | Pull Command | Notes |
+|----------|-------------------|-------------|-------|
+| **6 GB** | `qwen3:1.7b` | `ollama pull qwen3:1.7b` | Fastest, basic extraction quality |
+| **8 GB** | `qwen3:8b` ⭐ | `ollama pull qwen3:8b` | **Best balance** of speed and quality |
+| **12 GB** | `qwen3:8b` | `ollama pull qwen3:8b` | Same model, more headroom for context |
+| **16 GB+** | `qwen3:14b` | `ollama pull qwen3:14b` | Best quality, slower extraction |
+| **CPU only** | `qwen3:1.7b` | `ollama pull qwen3:1.7b` | Works but significantly slower |
 
-### Option B: Ollama (Recommended for Linux/Mac)
-
-1. Install [Ollama](https://ollama.ai/)
-2. Pull a model:
-
-```bash
-ollama pull qwen2.5:7b
-# or
-ollama pull mistral:7b-instruct
-```
+> **Recommended**: `qwen3:8b` for most setups. It provides excellent scientific entity extraction at reasonable speed (~5-15s per batch). Use the same model for both ingestion and reasoning unless you have 16GB+ VRAM.
 
 3. Ollama starts automatically on `http://localhost:11434/v1`
 4. Configure `.env`:
 
 ```env
 LLM_PROVIDER=local
-LOCAL_LLM_MODEL=qwen2.5:7b
 LOCAL_LLM_BASE_URL=http://localhost:11434/v1
+INGESTION_LLM_MODEL=qwen3:8b
+REASONING_LLM_MODEL=qwen3:8b
 ```
 
-### Option C: OpenAI-compatible API (Cloud)
+### Qwen3 Thinking Mode
 
-Any OpenAI-compatible endpoint works (e.g., Together AI, Groq, OpenRouter):
+Qwen3 models feature a **thinking mode** that improves reasoning at the cost of speed:
+
+| Phase | Thinking | Why |
+|-------|----------|-----|
+| Ingestion (default) | **OFF** (`/no_think`) | Speed: process 100 papers overnight |
+| Ingestion + `--thinking` | **ON** | Quality: ambiguous/complex entities |
+| Chat / Agent | **ON** (auto) | Quality: complex multi-tool reasoning |
+
+### Alternative: Cloud API
+
+Any OpenAI-compatible endpoint works (Together AI, Groq, OpenRouter):
 
 ```env
 LLM_PROVIDER=local
@@ -220,24 +244,20 @@ LOCAL_LLM_MODEL=your-model-name
 LOCAL_LLM_BASE_URL=https://api.your-provider.com/v1
 ```
 
-Place your API key in `config/api-key`:
+Place your API key in `config/api-key`.
 
-```
-sk-your-api-key-here
-```
-
-### Verifying the LLM Connection
+### Verifying the Connection
 
 ```bash
-# Terminal chat demo (quick test)
+# Quick diagnostic (tests raw speed, tool calling, full agent)
+python scripts/diagnose_agent.py
+
+# Compare models on extraction quality
+python scripts/test_ollama_models.py
+
+# Terminal chat
 python scripts/chat_demo.py
 ```
-
-If the LLM is connected, you'll see:
-- Model name detected and displayed
-- Response to a test query
-
-If **not** connected, you'll get a clear error: `No model loaded in LM Studio/Ollama`.
 
 ---
 
@@ -328,23 +348,27 @@ Browse chunks visually in the web interface:
 EcoloGRAPH/
 ├── config/
 │   ├── api-key.example        # API key template
-│   └── prompts/               # LLM prompt templates
+│   └── prompts/               # LLM prompt templates (with /no_think support)
 ├── data/
 │   └── raw/                   # Your PDFs go here
-├── docs/                      # Full documentation (5 files)
+├── docs/                      # Full documentation (6 files)
 │   ├── 01_project_documentation.md
 │   ├── 02_development_log.md
 │   ├── 03_tutorial.md
 │   ├── 04_architecture_diagrams.md
-│   └── 05_module_summary.md
+│   ├── 05_module_summary.md
+│   └── 06_testing_guide.md    # Component verification guide
 ├── scripts/
 │   ├── app.py                 # Streamlit UI entry point
-│   ├── ingest.py              # Ingestion pipeline CLI
+│   ├── ingest.py              # Ingestion pipeline CLI (with --model, --thinking)
 │   ├── chat_demo.py           # Terminal chat agent
-│   ├── fix_fts5.py            # FTS5 index repair tool
+│   ├── diagnose_agent.py      # Ollama + agent diagnostic
+│   ├── test_ollama_models.py  # Model comparison benchmark
+│   ├── rebuild_fts.py         # FTS5 index rebuild tool
+│   ├── verify_setup.py        # Installation verification
 │   └── demo_pipeline.py       # Paper selection demo
 ├── src/
-│   ├── core/                  # Config, schemas, LLM client, 43 domains
+│   ├── core/                  # Config (dual-model), schemas, LLM client, 43 domains
 │   ├── ingestion/             # PDF parser (Docling), section-aware chunker
 │   ├── extraction/            # Domain classifier, LLM entity extractor
 │   ├── search/                # SQLite FTS5 index, BM25 ranked search
@@ -416,20 +440,32 @@ EcoloGRAPH/
 
 | Problem | Solution |
 |---------|----------|
-| `fts5: missing row N` | Run `python scripts/fix_fts5.py` to rebuild the FTS5 index |
-| `No model loaded` | Start LM Studio/Ollama and load a model before launching |
+| `fts5: missing row N` | Run `python scripts/rebuild_fts.py` to rebuild the FTS5 index |
+| `No model loaded` | Start Ollama: `ollama pull qwen3:8b` and ensure it's running |
+| Qwen3 empty responses | Check `reasoning` field — use `python scripts/diagnose_agent.py` |
+| Qwen3 `<think>` in JSON | Prompts include `/no_think`; add `--thinking` flag if you need it |
 | Qdrant connection error | Ensure Docker is running: `docker start qdrant` |
 | Neo4j connection error | Ensure Docker is running: `docker start neo4j` |
-| Slow chat responses | Router handles ~80% of queries without LLM; for the rest, use a faster model (7B vs 14B) |
-| PDF viewer blank | PDF.js renders on canvas — if blank, check browser console for errors |
-| Graph V2 not loading | Make sure `streamlit-agraph` is installed: `pip install streamlit-agraph` |
+| Slow chat responses | Try smaller ingestion model: `--model qwen3:1.7b` |
+| PDF viewer blank | PDF.js renders on canvas — check browser console for errors |
+| Graph V2 not loading | Install: `pip install streamlit-agraph` |
 
 ---
 
 ## 🧪 Running Tests
 
 ```bash
+# Verify installation
+python scripts/verify_setup.py
+
+# Run automated tests
 python -m pytest tests/test_integration.py -v
+
+# Test LLM connection
+python scripts/diagnose_agent.py
+
+# Run full component-by-component verification
+# See docs/06_testing_guide.md for details
 ```
 
 ---
@@ -443,6 +479,7 @@ python -m pytest tests/test_integration.py -v
 | [Tutorial](docs/03_tutorial.md) | Step-by-step user guide |
 | [Architecture Diagrams](docs/04_architecture_diagrams.md) | 7 Mermaid system diagrams |
 | [Module Summary](docs/05_module_summary.md) | All modules, classes, and functionalities |
+| [Testing Guide](docs/06_testing_guide.md) | Component-by-component verification |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute to the project |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Technical architecture deep-dive |
 

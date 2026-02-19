@@ -46,22 +46,33 @@ class LLMClient:
         temperature: float | None = None,
         max_tokens: int | None = None,
         timeout: float = 120.0,
-        api_key: str | None = None
+        api_key: str | None = None,
+        role: str | None = None  # "ingestion" or "reasoning"
     ):
         """
         Initialize LLM client.
         
         Args:
-            model: Model name (e.g., "qwen3:14b")
+            model: Model name (e.g., "qwen2.5-vl:7b")
             base_url: API base URL (e.g., "http://localhost:11434/v1")
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate
             timeout: Request timeout in seconds
             api_key: Optional API key for authentication
+            role: Model role - "ingestion" (VLM for graph building) 
+                  or "reasoning" (text model for queries/agent).
+                  If set, overrides model param with the configured model for that role.
         """
         settings = get_settings()
         
-        self.model = model or settings.llm.model
+        # Role-based model selection
+        if role == "ingestion":
+            self.model = model or settings.llm.ingestion_model
+        elif role == "reasoning":
+            self.model = model or settings.llm.reasoning_model
+        else:
+            self.model = model or settings.llm.model
+        
         self.base_url = base_url or settings.llm.base_url
         self.temperature = temperature if temperature is not None else settings.llm.temperature
         self.max_tokens = max_tokens or settings.llm.max_tokens
@@ -83,7 +94,7 @@ class LLMClient:
             if detected:
                 self.model = detected
         
-        logger.info(f"LLMClient initialized: model={self.model}, base_url={self.base_url}")
+        logger.info(f"LLMClient initialized: model={self.model}, role={role or 'default'}, base_url={self.base_url}")
     
     def _detect_loaded_model(self) -> str | None:
         """Try to detect the loaded model from LM Studio."""
@@ -195,9 +206,12 @@ If you cannot extract the requested information, use null for optional fields.""
         self,
         messages: list[dict],
         temperature: float,
-        max_tokens: int
+        max_tokens: int,
+        _retries: int = 2
     ) -> LLMResponse:
-        """Make chat completion request to OpenAI-compatible API."""
+        """Make chat completion request to OpenAI-compatible API with retry."""
+        import time as _time
+        
         url = f"{self.base_url}/chat/completions"
         
         payload = {
@@ -207,38 +221,65 @@ If you cannot extract the requested information, use null for optional fields.""
             "max_tokens": max_tokens,
         }
         
-        try:
-            logger.debug(f"LLM request to {url}")
-            response = self.client.post(url, json=payload)
-            response.raise_for_status()
-            
-            data = response.json()
-            
-            content = data["choices"][0]["message"]["content"]
-            usage = data.get("usage")
-            # Get actual model name from response (LM Studio includes it)
-            actual_model = data.get("model", self.model)
-            
-            return LLMResponse(
-                content=content,
-                model=actual_model,
-                usage=usage,
-                raw_response=data
-            )
-            
-        except httpx.TimeoutException:
-            logger.error(f"LLM request timed out after {self.timeout}s")
-            raise
-        except httpx.HTTPStatusError as e:
-            logger.error(f"LLM request failed: {e.response.status_code}")
-            raise
-        except Exception as e:
-            logger.error(f"LLM request error: {e}")
-            raise
+        last_error = None
+        for attempt in range(_retries + 1):
+            try:
+                logger.debug(f"LLM request to {url} (attempt {attempt+1})")
+                response = self.client.post(url, json=payload)
+                response.raise_for_status()
+                
+                data = response.json()
+                
+                msg = data["choices"][0]["message"]
+                content = msg.get("content", "") or ""
+                reasoning = msg.get("reasoning", "") or ""
+                
+                # Qwen3 via Ollama puts thinking in 'reasoning' and content may be empty.
+                # Combine both: prefer content if it has JSON, else use reasoning.
+                if not content.strip() and reasoning.strip():
+                    content = reasoning
+                elif content.strip() and reasoning.strip():
+                    # Both present: content has the answer, but if content has no JSON
+                    # and reasoning does, use reasoning
+                    if '{' not in content and '{' in reasoning:
+                        content = reasoning
+                
+                usage = data.get("usage")
+                actual_model = data.get("model", self.model)
+                
+                return LLMResponse(
+                    content=content,
+                    model=actual_model,
+                    usage=usage,
+                    raw_response=data
+                )
+                
+            except httpx.TimeoutException:
+                logger.error(f"LLM request timed out after {self.timeout}s")
+                raise
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                if status in (500, 502, 503) and attempt < _retries:
+                    wait = 3 * (attempt + 1)
+                    logger.warning(f"LLM request failed ({status}), retrying in {wait}s... (attempt {attempt+1}/{_retries+1})")
+                    _time.sleep(wait)
+                    last_error = e
+                    continue
+                logger.error(f"LLM request failed: {status}")
+                raise
+            except Exception as e:
+                logger.error(f"LLM request error: {e}")
+                raise
+        
+        raise last_error
     
     def _extract_json(self, text: str) -> str:
         """Extract JSON from text that might have markdown formatting."""
+        import re
         text = text.strip()
+        
+        # Remove Qwen3 thinking tags
+        text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
         
         # Remove markdown code blocks
         if text.startswith("```json"):

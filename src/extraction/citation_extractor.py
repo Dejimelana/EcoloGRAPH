@@ -39,7 +39,7 @@ class CitationExtractor:
             llm_client: LLM client instance (creates default if None)
             prompts_dir: Directory containing prompt templates
         """
-        self.llm = llm_client or LLMClient()
+        self.llm = llm_client or LLMClient(role="ingestion")
         
         # Load prompt
         if prompts_dir:
@@ -195,8 +195,11 @@ class CitationExtractor:
         
         Handles various JSON formats (with/without markdown, etc.)
         """
+        import re
         # Remove markdown code blocks if present
         content = content.strip()
+        # Remove Qwen3 thinking tags
+        content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
         if content.startswith("```"):
             # Extract content between ```
             lines = content.split("\n")
