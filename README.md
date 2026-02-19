@@ -12,7 +12,7 @@
 
 EcoloGRAPH is a **Graph RAG (Retrieval-Augmented Generation) system** designed specifically for ecological and environmental research. It transforms PDF scientific publications into a structured, queryable knowledge base where every entity is traceable to its exact source (paper, page, paragraph).
 
-<img width="1024" height="1024" alt="ChatGPT Image 19 feb 2026, 14_01_14" src="https://github.com/user-attachments/assets/0335b668-b227-47ae-8856-a605a241d7d7" />
+<img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/9ca0a607-23a4-4ac0-878c-73f45ac46e75" />
 
 ---
 
