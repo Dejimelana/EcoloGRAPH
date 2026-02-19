@@ -7,13 +7,15 @@ EcoloGRAPH is made possible by the contributions of the following people:
 ### Project Lead & Main Developer
 - **Diego Jiménez** - Initial work, architecture design, and ongoing development
   - GitHub: [@dejimelana](https://github.com/dejimelana)
-  - Contributions: Coordination, Designing, Core system, Graph RAG pipeline, LangGraph agent, UI development
+  - Contributions: Coordination, Designing, Core system, Graph RAG pipeline, LangGraph agent, UI development, testing and global project integration
 - **Claude Sonnet 4.5** - Initial work, architecture design, and ongoing development
   - Contributions: Coding for core system, Graph RAG pipeline, LangGraph agent, UI development
 - **Claude Opus 4.5 and 4.6** - Initial work, architecture design, and ongoing development
   - Contributions: Coding for core system, Graph RAG pipeline, LangGraph agent, UI development
-- **Antigravity (Gemini 2.5 Pro)** - v1.5.0 feature development, documentation, and UI/UX refinement
+- **Gemini 2.5 Pro** - v1.5.0 feature development, documentation, and UI/UX refinement
   - Contributions: Graph Explorer V2 integration (full-width layout, co-occurrence edges, chunk viewer), Taxonomy Explorer rewrite, clickable search results, GBIF common name resolution, comprehensive documentation updates (README, ARCHITECTURE, CHANGELOG, tutorial), version and test count audit
+- **ChatGPT 5.2 y Gemini 3.0 Pro** - Infographic images generation
+  - Contribution: Images and infographics
 
 --
 
