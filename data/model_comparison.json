@@ -1,0 +1,28 @@
+[
+  {
+    "model": "llama3.2:3b",
+    "time": 46.46249723434448,
+    "tokens_in": 565,
+    "tokens_out": 403,
+    "json_valid": true,
+    "species_count": 4,
+    "measurements_count": 4,
+    "locations_count": 1,
+    "relations_count": 0,
+    "score": 11,
+    "max_score": 17
+  },
+  {
+    "model": "qwen2.5-vl:7b-instruct-q6_K_L",
+    "time": 61.658692836761475,
+    "tokens_in": 550,
+    "tokens_out": 448,
+    "json_valid": true,
+    "species_count": 4,
+    "measurements_count": 4,
+    "locations_count": 1,
+    "relations_count": 2,
+    "score": 13,
+    "max_score": 17
+  }
+]

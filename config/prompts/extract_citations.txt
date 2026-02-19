@@ -37,3 +37,5 @@ IMPORTANT:
 - Ignore non-paper citations (books, reports, websites) unless they have a DOI
 
 Return ONLY the JSON array, no additional text.
+
+/no_think

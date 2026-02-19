@@ -53,7 +53,7 @@ class EntityExtractor:
             llm_client: LLM client instance (creates default if None)
             prompts_dir: Directory containing prompt templates
         """
-        self.llm = llm_client or LLMClient()
+        self.llm = llm_client or LLMClient(role="ingestion")
         
         # Load prompts
         if prompts_dir:
@@ -384,11 +384,17 @@ class EntityExtractor:
                 prompt=user_prompt,
                 system_prompt=self.system_prompt,
                 temperature=0.1,
-                max_tokens=500
+                max_tokens=2048
             )
             
+            # Debug: log raw response for diagnosis
+            raw_content = response.content
+            logger.debug(f"Raw LLM response (first 500 chars): {raw_content[:500]}")
+            if '<think>' in raw_content:
+                logger.info(f"Thinking tokens detected, stripping before parse")
+            
             # Parse response
-            raw_data = self._parse_response(response.content)
+            raw_data = self._parse_response(raw_content)
             
             # Build result (paper-level)
             result = self._build_extraction_result(
@@ -514,8 +520,12 @@ class EntityExtractor:
     
     def _parse_response(self, content: str) -> dict[str, Any]:
         """Parse LLM response to JSON."""
+        import re
         # Clean response
         content = content.strip()
+        
+        # Remove Qwen3 thinking tags
+        content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
         
         # Remove markdown code blocks
         if content.startswith("```json"):
@@ -537,9 +547,24 @@ class EntityExtractor:
         
         try:
             return json.loads(json_str)
-        except json.JSONDecodeError as e:
-            logger.warning(f"JSON parse error: {e}")
-            return {}
+        except json.JSONDecodeError:
+            # Try to find the correct closing brace by counting nesting
+            depth = 0
+            for i, ch in enumerate(content[start:], start=start):
+                if ch == '{':
+                    depth += 1
+                elif ch == '}':
+                    depth -= 1
+                    if depth == 0:
+                        json_str = content[start:i+1]
+                        break
+            
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON parse error: {e}")
+                logger.debug(f"Raw JSON (first 300 chars): {json_str[:300]}")
+                return {}
     
     def _build_extraction_result(
         self,

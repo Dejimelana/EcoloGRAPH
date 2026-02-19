@@ -5,6 +5,60 @@ All notable changes to EcoloGRAPH will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-02-19
+
+### 🚀 Major: Ollama Migration
+
+Migrated primary LLM backend from LM Studio to **Ollama**, with full support for Qwen3 thinking models.
+
+- **Dual-Model Architecture**: Separate models for ingestion (`INGESTION_LLM_MODEL`) and reasoning (`REASONING_LLM_MODEL`)
+- **Qwen3 `reasoning` Field Support**: Ollama returns thinking output in a separate `reasoning` JSON field — LLM client now reads both `content` and `reasoning` fields automatically
+- **`/no_think` Directive**: Extraction prompts disable thinking mode for fast JSON output; agent/chat keeps thinking enabled for better reasoning
+- **Configurable Ingestion CLI**: New flags `--model`, `--thinking`, `--max-tokens`, `--timeout`
+
+### 🎉 Added
+
+- **CLI Ingestion Parameters** (`scripts/ingest.py`):
+  - `--model <name>` — Override ingestion model (default: from config)
+  - `--thinking` — Enable thinking mode (slower, better ambiguity resolution)
+  - `--max-tokens <n>` — Max tokens per LLM response (default: 2048)
+  - `--timeout <s>` — LLM request timeout (default: 120s)
+
+- **Diagnostic Scripts**:
+  - `scripts/diagnose_agent.py` — Tests raw Ollama speed, tool calling, and full agent pipeline
+  - `scripts/test_ollama_models.py` — Compares models on extraction quality, speed, and JSON compliance
+  - `scripts/rebuild_fts.py` — Rebuilds corrupted SQLite FTS5 index safely
+
+- **Testing Guide** (`docs/06_testing_guide.md`):
+  - Component-by-component verification (9 sections)
+  - Setup, LLM, extraction, pipeline, search, graph, agent, automated tests
+
+### 🐛 Fixed
+
+- **Qwen3 Empty Content**: LLM client now reads `reasoning` field when `content` is empty (Ollama puts Qwen3 thinking output in separate field)
+- **`<think>` Tag Pollution**: Strips `<think>...</think>` tags before JSON parsing in entity extractor, citation extractor, and LLM client
+- **Graph Builder Schema Mismatches**:
+  - `species.common_names` → `species.common_name` (singular, matching `SpeciesMention` schema)
+  - `measurement.min_value` → `measurement.value_min` (matching `Measurement` schema)
+  - `measurement.max_value` → `measurement.value_max`
+  - `measurement.std_error` → `measurement.std_dev`
+- **Agent AttributeError**: Fixed `self.llm` → `self.llm_fast` in `QueryAgent._agent_node`
+- **Entity Extraction Token Limit**: Increased `max_tokens` from 500 to 2048 for extraction (Qwen3 thinking consumes ~400 tokens, leaving no room for JSON)
+
+### ⚡ Performance
+
+- **Extraction Speed**: `/no_think` eliminates ~400 thinking tokens per batch, reducing extraction time by ~40%
+- **Model Flexibility**: Users can choose smaller/faster models for ingestion and larger models for reasoning
+
+### 📚 Documentation
+
+- Updated README.md: Ollama as recommended LLM, new CLI flags, dual-model setup
+- Updated .env.example with dual-model variables
+- Created `docs/06_testing_guide.md` for component-by-component verification
+- Updated `docs/03_recent_updates.md` with v1.5.0 migration details
+
+---
+
 ## [1.4.0] - 2026-02-11
 
 ### 🚀 Major Features
@@ -211,6 +265,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    ```
 
 3. **No data migration required** - All existing data is compatible
+
+### Upgrading to 1.5.0 (from 1.4.x)
+
+1. **Install Ollama** (if not already):
+   - Download from [ollama.ai](https://ollama.ai/)
+   - Pull recommended model: `ollama pull qwen3:8b`
+
+2. **Update `.env`**:
+   ```env
+   LOCAL_LLM_BASE_URL=http://localhost:11434/v1
+   INGESTION_LLM_MODEL=qwen3:8b
+   REASONING_LLM_MODEL=qwen3:8b
+   ```
+
+3. **New ingestion flags available**:
+   ```bash
+   python scripts/ingest.py data/raw/ --model qwen3:8b --max-tokens 2048
+   ```
+
+4. **Prompt updates applied automatically** — `/no_think` added to extraction prompts
 
 ---
 

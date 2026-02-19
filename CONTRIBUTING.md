@@ -391,7 +391,7 @@ Add screenshots if applicable
 - OS: [e.g., Windows 11, Ubuntu 22.04]
 - Python version: [e.g., 3.11.5]
 - EcoloGRAPH version: [e.g., 1.2.0]
-- LLM provider: [e.g., LM Studio, Ollama]
+- LLM provider: [e.g., Ollama, OpenAI-compatible]
 
 **Additional context**
 Any other relevant information

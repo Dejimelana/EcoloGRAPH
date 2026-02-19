@@ -91,7 +91,9 @@ def check_config():
         from src.core.config import get_settings
         settings = get_settings()
         print(f"  ✅ Config loaded successfully")
-        print(f"     LLM Model: {settings.llm.model}")
+        print(f"     Base URL: {settings.llm.base_url}")
+        print(f"     Ingestion Model: {settings.llm.ingestion_model}")
+        print(f"     Reasoning Model: {settings.llm.reasoning_model}")
         print(f"     Embedding Model: {settings.embedding.model}")
         return True
     except Exception as e:

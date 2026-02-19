@@ -58,11 +58,11 @@ EcoloGRAPH is a **multi-layer Graph RAG system** designed for ecological researc
 - **Performance**: ~70% reduction in LLM calls (25 vs 80 for typical paper)
 - **Quality**: Cross-chunk entity resolution and automatic deduplication
 
-**LM Studio Auto-Restart System**
-- Created `lm_studio_manager.py` for process health monitoring and restart
-- Detects corrupted state after context overflow and automatically restarts
-- Pauses ingestion until LM Studio is ready (~30-60s recovery time)
-- Prevents cascade failures from single problematic chunk
+**Ollama Integration & Dual-Model Architecture**
+- Migrated from LM Studio to Ollama as primary LLM backend
+- Dual-model config: separate ingestion and reasoning models
+- Qwen3 `reasoning` field support + `<think>` tag stripping
+- Configurable CLI: `--model`, `--thinking`, `--max-tokens`, `--timeout`
 
 **Metadata Extraction Improvements**
 - Added `year` field to `ParsedDocument` schema
@@ -567,7 +567,7 @@ neo4j_data/
 ### Data Privacy
 - All processing can be done locally (no cloud APIs required)
 - PDFs never leave your machine
-- LLM runs locally via LM Studio/Ollama
+- LLM runs locally via Ollama (no data sent to cloud)
 
 ### API Keys
 - External APIs optional (FishBase, GBIF, IUCN)

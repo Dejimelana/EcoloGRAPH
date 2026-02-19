@@ -12,12 +12,33 @@ from pydantic_settings import BaseSettings
 
 
 class LLMSettings(BaseSettings):
-    """LLM configuration."""
+    """LLM configuration with dual-model support.
+    
+    Two models serve different purposes:
+      - ingestion_model: VLM for building the knowledge graph (handles PDFs, images, non-OCR docs)
+      - reasoning_model: Powerful text model for traversing the graph and answering queries
+    
+    The 'model' field is kept for backward compatibility and defaults to the ingestion model.
+    """
     provider: str = Field(default="local", alias="LLM_PROVIDER")
-    model: str = Field(default="auto", alias="LOCAL_LLM_MODEL")  # 'auto' uses loaded model
-    base_url: str = Field(default="http://localhost:1234/v1", alias="LOCAL_LLM_BASE_URL")
+    base_url: str = Field(default="http://localhost:11434/v1", alias="LOCAL_LLM_BASE_URL")
     temperature: float = Field(default=0.1, alias="LLM_TEMPERATURE")
     max_tokens: int = Field(default=4096, alias="LLM_MAX_TOKENS")
+    
+    # Dual-model configuration
+    ingestion_model: str = Field(
+        default="qwen3:8b",
+        alias="INGESTION_LLM_MODEL",
+        description="Model for entity extraction and knowledge graph construction"
+    )
+    reasoning_model: str = Field(
+        default="gpt-oss:20b",
+        alias="REASONING_LLM_MODEL",
+        description="Text model for graph traversal, agent queries, and chat"
+    )
+    
+    # Backward compatibility: 'model' defaults to ingestion_model
+    model: str = Field(default="gpt-oss:20b", alias="LOCAL_LLM_MODEL")
 
 
 class EmbeddingSettings(BaseSettings):

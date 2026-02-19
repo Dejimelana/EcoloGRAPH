@@ -46,3 +46,6 @@ Extract relationships between entities:
 4. Do NOT infer information that is not stated
 5. Use null for fields where information is not available
 6. Be precise with units - convert spelled-out units to symbols (e.g., "meters" → "m")
+7. Respond ONLY with a valid JSON object. No explanations, no thinking, no markdown.
+
+/no_think
