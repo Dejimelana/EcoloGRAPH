@@ -248,31 +248,134 @@ def _render_mini_graph():
         )
         st.markdown(legend_html, unsafe_allow_html=True)
 
-        # Render mini-graph
-        config = Config(
+        # --- Layout Controls ---
+        ctrl1, ctrl2, ctrl3 = st.columns([2, 1, 1])
+        with ctrl1:
+            layout = st.selectbox(
+                "Layout",
+                ["ForceAtlas2", "Force-Directed", "Hierarchical", "Repulsion"],
+                index=0,
+                key="dash_graph_layout",
+            )
+        with ctrl2:
+            show_labels = st.checkbox("Labels", value=True, key="dash_graph_labels")
+        with ctrl3:
+            show_edge_labels = st.checkbox("Edge labels", value=False, key="dash_edge_labels")
+
+        is_hierarchical = layout == "Hierarchical"
+
+        # Physics tuning (hidden for hierarchical)
+        gravity = -26000
+        spring_len = 150
+        spring_k = 0.04
+        damping_val = 0.09
+        central_g = 0.005
+        node_dist = 120
+
+        if not is_hierarchical:
+            with st.expander("⚙️ Physics Settings", expanded=False):
+                pc1, pc2 = st.columns(2)
+                with pc1:
+                    gravity = st.slider(
+                        "Gravity", -80000, -1000, -26000, 1000,
+                        key="dash_gravity",
+                    )
+                    spring_len = st.slider(
+                        "Spring Length", 50, 400, 150, 10,
+                        key="dash_spring_len",
+                    )
+                    damping_val = st.slider(
+                        "Damping", 0.01, 0.50, 0.09, 0.01,
+                        key="dash_damping",
+                    )
+                with pc2:
+                    spring_k = st.slider(
+                        "Spring Constant", 0.01, 0.20, 0.04, 0.01,
+                        key="dash_spring_k",
+                    )
+                    central_g = st.slider(
+                        "Central Gravity", 0.0, 1.0, 0.005, 0.005,
+                        key="dash_central_g",
+                    )
+                    node_dist = st.slider(
+                        "Node Distance", 50, 300, 120, 10,
+                        key="dash_node_dist",
+                    )
+
+        # Build config based on selected layout
+        common_kw = dict(
             width="100%",
             height=350,
             directed=False,
-            physics={
-                "enabled": True,
-                "solver": "forceAtlas2Based",
-                "forceAtlas2Based": {
-                    "gravitationalConstant": -26000,
-                    "centralGravity": 0.005,
-                    "springLength": 150,
-                    "springConstant": 0.04,
-                    "damping": 0.09,
-                    "avoidOverlap": 0.5,
-                },
-                "stabilization": {"iterations": 100},
-            },
-            hierarchical=False,
             nodeHighlightBehavior=True,
             highlightColor="#FF6B6B",
             collapsible=False,
-            node={"labelProperty": "label"},
-            link={"labelProperty": "label", "renderLabel": False},
+            node={"labelProperty": "label" if show_labels else None},
+            link={
+                "labelProperty": "label",
+                "renderLabel": show_edge_labels,
+            },
         )
+
+        if is_hierarchical:
+            config = Config(
+                **common_kw,
+                physics=False,
+                hierarchical=True,
+            )
+        elif layout == "Repulsion":
+            config = Config(
+                **common_kw,
+                hierarchical=False,
+                physics={
+                    "enabled": True,
+                    "solver": "repulsion",
+                    "repulsion": {
+                        "centralGravity": central_g,
+                        "springLength": spring_len,
+                        "springConstant": spring_k,
+                        "nodeDistance": node_dist,
+                        "damping": damping_val,
+                    },
+                    "stabilization": {"iterations": 100},
+                },
+            )
+        elif layout == "Force-Directed":
+            config = Config(
+                **common_kw,
+                hierarchical=False,
+                physics={
+                    "enabled": True,
+                    "solver": "barnesHut",
+                    "barnesHut": {
+                        "gravitationalConstant": gravity,
+                        "centralGravity": central_g,
+                        "springLength": spring_len,
+                        "springConstant": spring_k,
+                        "damping": damping_val,
+                        "avoidOverlap": 0,
+                    },
+                    "stabilization": {"iterations": 100},
+                },
+            )
+        else:  # ForceAtlas2
+            config = Config(
+                **common_kw,
+                hierarchical=False,
+                physics={
+                    "enabled": True,
+                    "solver": "forceAtlas2Based",
+                    "forceAtlas2Based": {
+                        "gravitationalConstant": gravity,
+                        "centralGravity": central_g,
+                        "springLength": spring_len,
+                        "springConstant": spring_k,
+                        "damping": damping_val,
+                        "avoidOverlap": 0.5,
+                    },
+                    "stabilization": {"iterations": 100},
+                },
+            )
 
         agraph(nodes=nodes, edges=edges, config=config)
 
