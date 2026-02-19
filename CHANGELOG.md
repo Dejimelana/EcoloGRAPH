@@ -5,6 +5,9 @@ All notable changes to EcoloGRAPH will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+![Gemini_Generated_Image_sun9t2sun9t2sun9](https://github.com/user-attachments/assets/e6dd9908-3e77-479e-98f7-2a36af56d3ec)
+
+
 ## [1.5.0] - 2026-02-19
 
 ### 🚀 Major: Ollama Migration
