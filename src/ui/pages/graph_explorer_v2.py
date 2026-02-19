@@ -403,6 +403,47 @@ def _build_graph_data(min_connections=0, domain_filter=None, max_nodes=200):
                                 width=1 + min(cr["shared_papers"], 5)
                             ))
                 
+                # --- Location nodes ---
+                location_query = """
+                MATCH (p:Paper)-[r:REFERENCES_LOCATION]->(l:Location)
+                WHERE p.doc_id IN $paper_ids
+                RETURN p.doc_id AS paper_id,
+                       l.location_id AS loc_id,
+                       l.name AS loc_name,
+                       l.country AS country,
+                       l.habitat_type AS habitat
+                """
+                paper_ids = [rec["paper_id"] for rec in records]
+                with gb._driver.session(database=gb.database) as session3:
+                    loc_result = session3.run(location_query, {"paper_ids": paper_ids})
+                    for lr in loc_result:
+                        loc_node_id = f"location_{lr['loc_id']}"
+                        loc_label = lr["loc_name"] or lr["loc_id"]
+                        
+                        # Add location node if not already present
+                        if not any(n.id == loc_node_id for n in nodes):
+                            tooltip = f"Location: {loc_label}"
+                            if lr.get("country"):
+                                tooltip += f" ({lr['country']})"
+                            if lr.get("habitat"):
+                                tooltip += f" | {lr['habitat']}"
+                            
+                            nodes.append(Node(
+                                id=loc_node_id,
+                                label=loc_label,
+                                title=tooltip,
+                                color="#F7B731",
+                                size=12,
+                                type="Location"
+                            ))
+                        
+                        # Edge: Paper → Location
+                        edges.append(Edge(
+                            source=lr["paper_id"],
+                            target=loc_node_id,
+                            label="located_in"
+                        ))
+                
                 gb.close()
                 logger.info(f"Built graph with {len(nodes)} nodes, {len(edges)} edges (Neo4j)")
                 return nodes, edges
@@ -515,6 +556,8 @@ def _render_node_details_panel():
         _render_paper_details_below(node_id)
     elif node_type == "Species":
         _render_species_details_below(node_id)
+    elif node_type == "Location":
+        _render_location_details_below(node_id)
     elif node_type == "Domain":
         _render_domain_details_below(node_id)
     else:
@@ -674,6 +717,63 @@ def _render_domain_details_below(domain_name):
         
     except Exception as e:
         st.error(f"Failed to load domain details: {e}")
+
+
+def _render_location_details_below(location_id):
+    """Render location details and linked papers below the graph."""
+    st.markdown(f"## 📍 Location Details")
+    
+    try:
+        gb = GraphBuilder()
+        
+        # Get location info and linked papers
+        query = """
+        MATCH (l:Location {location_id: $loc_id})
+        OPTIONAL MATCH (p:Paper)-[:REFERENCES_LOCATION]->(l)
+        RETURN l.name AS name, l.country AS country,
+               l.region AS region, l.habitat_type AS habitat,
+               l.latitude AS lat, l.longitude AS lon,
+               collect(DISTINCT {title: p.title, year: p.year, doc_id: p.doc_id}) AS papers
+        """
+        
+        with gb._driver.session(database=gb.database) as session:
+            result = session.run(query, {"loc_id": location_id})
+            record = result.single()
+        
+        gb.close()
+        
+        if not record:
+            st.warning(f"Location not found: {location_id}")
+            return
+        
+        st.markdown(f"### {record['name'] or location_id}")
+        
+        # Metadata row
+        mcol1, mcol2, mcol3, mcol4 = st.columns(4)
+        with mcol1:
+            st.metric("Country", record.get("country") or "N/A")
+        with mcol2:
+            st.metric("Region", record.get("region") or "N/A")
+        with mcol3:
+            st.metric("Habitat", record.get("habitat") or "N/A")
+        with mcol4:
+            papers = [p for p in record.get("papers", []) if p.get("doc_id")]
+            st.metric("Papers", len(papers))
+        
+        # Coordinates
+        lat, lon = record.get("lat"), record.get("lon")
+        if lat is not None and lon is not None:
+            st.markdown(f"**Coordinates:** {lat:.4f}°N, {lon:.4f}°E")
+        
+        # Linked papers
+        if papers:
+            with st.expander(f"📄 Papers referencing this location ({len(papers)})", expanded=True):
+                for p in papers:
+                    st.markdown(f"- **{p.get('title', 'Untitled')}** ({p.get('year', 'N/A')})")
+    
+    except Exception as e:
+        st.error(f"Failed to load location details: {e}")
+        logger.exception("Location details error")
 
 
 def _render_chunks_list(chunks_data, metadata):
