@@ -10,7 +10,7 @@ EcoloGRAPH is made possible by the contributions of the following people:
   - Contributions: Coordination, Designing, Core system, Graph RAG pipeline, LangGraph agent, UI development
 - **Claude Sonnet 4.5** - Initial work, architecture design, and ongoing development
   - Contributions: Coding for core system, Graph RAG pipeline, LangGraph agent, UI development
-- **Claude Opus 4.5** - Initial work, architecture design, and ongoing development
+- **Claude Opus 4.5 and 4.6** - Initial work, architecture design, and ongoing development
   - Contributions: Coding for core system, Graph RAG pipeline, LangGraph agent, UI development
 
 --
