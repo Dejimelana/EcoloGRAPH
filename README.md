@@ -12,9 +12,8 @@
 
 EcoloGRAPH is a **Graph RAG (Retrieval-Augmented Generation) system** designed specifically for ecological and environmental research. It transforms PDF scientific publications into a structured, queryable knowledge base where every entity is traceable to its exact source (paper, page, paragraph).
 
-   <img width="479" height="473" alt="image" src="https://github.com/user-attachments/assets/4c674b4e-05fa-418a-a94e-0c26461d5253" />
+<img width="1024" height="1024" alt="ChatGPT Image 19 feb 2026, 14_01_14" src="https://github.com/user-attachments/assets/0335b668-b227-47ae-8856-a605a241d7d7" />
 
-### ✨ Key Features (v1.5.0)
 
 - **🧠 Multi-Domain Knowledge Graph**: Classifies papers across **43 scientific domains** and builds a rich Neo4j graph.
 - **🧬 Dual-Prompt Extraction**: Ecological + generic scientific prompts with intelligent fallback.
@@ -33,8 +32,6 @@ EcoloGRAPH is a **Graph RAG (Retrieval-Augmented Generation) system** designed s
 - **🎨 Modern UI**: Streamlit dashboard with dark/light themes and glassmorphism design.
 
 ### 🆕 Recent Improvements (v1.5.0)
-
-   <img width="476" height="479" alt="image" src="https://github.com/user-attachments/assets/5e8d0fa4-693a-4c9d-a408-f78efb2adb4e" />
 
 - **Ollama Migration** — Primary LLM backend, replacing LM Studio. Full Qwen3 thinking model support.
 - **Dual-Model Architecture** — Separate models for ingestion (fast, `/no_think`) and reasoning (deep, with thinking).
