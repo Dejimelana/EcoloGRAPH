@@ -1183,8 +1183,7 @@ def _render_tab_species(graph_available):
             return
 
         st.caption(f"📊 {len(nodes)} species · {len(edges)} co-occurrences")
-        selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config(),
-                          key="species_agraph")
+        selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config())
 
         node_id, node_type = _handle_tab_selection(selected, "species_", "Species")
         if node_id:
@@ -1260,8 +1259,7 @@ def _render_tab_domains(papers):
         return
 
     st.caption(f"📊 {len(papers[:max_papers])} papers · {len(domain_set)} domains")
-    selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config(),
-                      key="domains_agraph")
+    selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config())
 
     node_id, node_type = _handle_tab_selection(selected, "domain_", "Paper")
     if node_id:
@@ -1355,8 +1353,7 @@ def _render_tab_papers(papers, graph_available):
         return
 
     st.caption(f"📊 {len(nodes)} papers · {len(edges)} connections")
-    selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config(),
-                      key="papers_agraph")
+    selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config())
 
     node_id, node_type = _handle_tab_selection(selected, "paper_", "Paper")
     if node_id:
@@ -1415,8 +1412,7 @@ def _render_tab_methodology(papers):
         return
 
     st.caption(f"📊 {len(papers)} papers · {len(method_papers)} study types")
-    selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config(),
-                      key="method_agraph")
+    selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config())
 
     node_id, node_type = _handle_tab_selection(selected, "method_", "Paper")
     if node_id:
@@ -1517,8 +1513,7 @@ def _render_tab_authors(papers):
                 ))
 
     st.caption(f"📊 {len(nodes)} authors · {len(edges)} collaborations")
-    selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config(),
-                      key="authors_agraph")
+    selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config())
 
     node_id, node_type = _handle_tab_selection(selected, "author_", "Author")
     if node_id:
@@ -1624,8 +1619,7 @@ def _render_tab_locations(graph_available):
                 ))
 
         st.caption(f"📊 {len(records)} locations · {len(paper_ids_seen)} papers")
-        selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config(),
-                          key="locations_agraph")
+        selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config())
 
         node_id, node_type = _handle_tab_selection(selected, "location_", "Paper")
         if node_id:
