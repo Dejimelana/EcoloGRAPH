@@ -678,11 +678,18 @@ def _render_species_details_below(scientific_name):
         with mcol2:
             st.metric("Co-occurring Species", len(cooccurring))
         
-        # Papers list
+        # Papers list — clickable
         if papers:
             with st.expander(f"📄 Papers mentioning *{scientific_name}* ({len(papers)})", expanded=True):
-                for p in papers:
-                    st.markdown(f"- **{p['title']}** ({p.get('year', 'N/A')})")
+                for i, p in enumerate(papers):
+                    pcol1, pcol2 = st.columns([5, 1])
+                    with pcol1:
+                        st.markdown(f"**{p['title']}** ({p.get('year', 'N/A')})")
+                    with pcol2:
+                        if st.button("📖", key=f"sp_paper_{i}_{p['doc_id']}", help="View paper details"):
+                            st.session_state.selected_node = p["doc_id"]
+                            st.session_state.selected_node_type = "Paper"
+                            st.rerun()
         
         # Co-occurring species
         if cooccurring:
@@ -722,10 +729,25 @@ def _render_domain_details_below(domain_name):
         
         st.metric("Papers", len(matching))
         
+        # Clickable papers
         if matching:
             with st.expander(f"📄 Papers in this domain ({len(matching)})", expanded=True):
-                for p in matching[:20]:
-                    st.markdown(f"- **{p.title}** ({p.year or 'N/A'})")
+                for i, p in enumerate(matching[:20]):
+                    pcol1, pcol2 = st.columns([5, 1])
+                    with pcol1:
+                        st.markdown(f"**{p.title}** ({p.year or 'N/A'})")
+                    with pcol2:
+                        if st.button("📖", key=f"dom_paper_{i}_{p.doc_id}", help="View paper details"):
+                            st.session_state.selected_node = p.doc_id
+                            st.session_state.selected_node_type = "Paper"
+                            st.rerun()
+        
+        # Source chunks from first few papers
+        if matching:
+            st.markdown("---")
+            st.markdown("### 📦 Source Chunks")
+            st.caption(f"Text from papers classified under this domain")
+            _render_domain_evidence_chunks(matching[:5])
         
     except Exception as e:
         st.error(f"Failed to load domain details: {e}")
@@ -758,7 +780,8 @@ def _render_location_details_below(location_id):
             st.warning(f"Location not found: {location_id}")
             return
         
-        st.markdown(f"### {record['name'] or location_id}")
+        loc_name = record['name'] or location_id
+        st.markdown(f"### {loc_name}")
         
         # Metadata row
         mcol1, mcol2, mcol3, mcol4 = st.columns(4)
@@ -777,11 +800,25 @@ def _render_location_details_below(location_id):
         if lat is not None and lon is not None:
             st.markdown(f"**Coordinates:** {lat:.4f}°N, {lon:.4f}°E")
         
-        # Linked papers
+        # Clickable papers
         if papers:
             with st.expander(f"📄 Papers referencing this location ({len(papers)})", expanded=True):
-                for p in papers:
-                    st.markdown(f"- **{p.get('title', 'Untitled')}** ({p.get('year', 'N/A')})")
+                for i, p in enumerate(papers):
+                    pcol1, pcol2 = st.columns([5, 1])
+                    with pcol1:
+                        st.markdown(f"**{p.get('title', 'Untitled')}** ({p.get('year', 'N/A')})")
+                    with pcol2:
+                        if st.button("📖", key=f"loc_paper_{i}_{p['doc_id']}", help="View paper details"):
+                            st.session_state.selected_node = p["doc_id"]
+                            st.session_state.selected_node_type = "Paper"
+                            st.rerun()
+        
+        # Source chunks mentioning this location
+        if papers:
+            st.markdown("---")
+            st.markdown("### 📦 Evidence Chunks")
+            st.caption(f"Text passages mentioning *{loc_name}*")
+            _render_location_evidence_chunks(papers, loc_name)
     
     except Exception as e:
         st.error(f"Failed to load location details: {e}")
@@ -887,6 +924,89 @@ def _render_species_evidence_chunks(gb, scientific_name, papers):
     
     if evidence_count == 0:
         st.info("No text chunks found mentioning this species. Chunks may not be indexed in Qdrant.")
+
+
+def _render_domain_evidence_chunks(matching_papers):
+    """Show chunks from papers classified under a domain."""
+    import re
+    evidence_count = 0
+
+    for paper in matching_papers:
+        try:
+            gb = GraphBuilder()
+            chunks = gb.get_paper_chunks(paper.doc_id)
+            gb.close()
+        except Exception:
+            continue
+
+        if not chunks:
+            continue
+
+        title = paper.title or "Unknown"
+        # Show first 3 chunks from each paper
+        preview = chunks[:3]
+        if preview:
+            with st.expander(f"📄 {title} ({len(chunks)} chunks total)", expanded=evidence_count == 0):
+                for i, chunk in enumerate(preview):
+                    text = chunk.get("text", "")
+                    display = text[:600] + "..." if len(text) > 600 else text
+                    st.markdown(
+                        f'<div style="background:rgba(30,41,59,0.6);padding:0.75rem;border-radius:8px;'
+                        f'line-height:1.6;font-size:0.85rem;color:#cbd5e1;border:1px solid rgba(148,163,184,0.15);'
+                        f'margin-bottom:0.5rem">{display}</div>',
+                        unsafe_allow_html=True,
+                    )
+            evidence_count += 1
+
+    if evidence_count == 0:
+        st.info("No text chunks found. Chunks may not be indexed in Qdrant.")
+
+
+def _render_location_evidence_chunks(papers, location_name):
+    """Find and display chunks that mention a specific location."""
+    import re
+    evidence_count = 0
+    name_lower = location_name.lower()
+
+    for paper in papers[:5]:
+        doc_id = paper.get("doc_id") if isinstance(paper, dict) else paper
+        title = paper.get("title", "Unknown") if isinstance(paper, dict) else doc_id
+
+        try:
+            gb = GraphBuilder()
+            chunks = gb.get_paper_chunks(doc_id)
+            gb.close()
+        except Exception:
+            continue
+
+        if not chunks:
+            continue
+
+        matching_chunks = [
+            c for c in chunks
+            if name_lower in c.get("text", "").lower()
+        ]
+
+        if matching_chunks:
+            with st.expander(f"📄 {title} ({len(matching_chunks)} mentions)", expanded=evidence_count == 0):
+                for chunk in matching_chunks[:3]:
+                    text = chunk.get("text", "")
+                    highlighted = re.sub(
+                        re.escape(location_name),
+                        f'<mark style="background:#f59e0b;color:#0f172a;padding:0 3px;border-radius:3px">{location_name}</mark>',
+                        text[:600],
+                        flags=re.IGNORECASE,
+                    )
+                    st.markdown(
+                        f'<div style="background:rgba(30,41,59,0.6);padding:0.75rem;border-radius:8px;'
+                        f'line-height:1.6;font-size:0.85rem;color:#cbd5e1;border:1px solid rgba(148,163,184,0.15);'
+                        f'margin-bottom:0.5rem">{highlighted}</div>',
+                        unsafe_allow_html=True,
+                    )
+            evidence_count += 1
+
+    if evidence_count == 0:
+        st.info("No text chunks found mentioning this location. Chunks may not be indexed in Qdrant.")
 
 
 # ══════════════════════════════════════════════════════════════════
