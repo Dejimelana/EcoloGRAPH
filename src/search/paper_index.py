@@ -31,6 +31,7 @@ class IndexedPaper:
     study_type: str | None
     source_path: str | None
     indexed_at: datetime
+    doi: str | None = None
     
     def to_dict(self) -> dict:
         return {
@@ -45,6 +46,7 @@ class IndexedPaper:
             "domains": self.domains,
             "study_type": self.study_type,
             "source_path": self.source_path,
+            "doi": self.doi,
             "indexed_at": self.indexed_at.isoformat()
         }
 
@@ -121,9 +123,17 @@ class PaperIndex:
                     domains TEXT,  -- JSON dict
                     study_type TEXT,
                     source_path TEXT,
-                    indexed_at TEXT
+                    indexed_at TEXT,
+                    doi TEXT
                 )
             """)
+            
+            # Migration: add doi column to existing databases
+            try:
+                conn.execute("ALTER TABLE papers ADD COLUMN doi TEXT")
+                logger.info("Added doi column to papers table")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
             
             # FTS5 virtual table for full-text search
             conn.execute("""
@@ -181,8 +191,8 @@ class PaperIndex:
             conn.execute("""
                 INSERT OR REPLACE INTO papers 
                 (doc_id, title, authors, year, journal, abstract, keywords,
-                 primary_domain, domains, study_type, source_path, indexed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 primary_domain, domains, study_type, source_path, indexed_at, doi)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 paper.doc_id,
                 paper.title,
@@ -195,7 +205,8 @@ class PaperIndex:
                 json.dumps(paper.domains),
                 paper.study_type,
                 paper.source_path,
-                paper.indexed_at.isoformat()
+                paper.indexed_at.isoformat(),
+                paper.doi,
             ))
             conn.commit()
         
@@ -365,6 +376,13 @@ class PaperIndex:
             if not row:
                 return None
             
+            # Handle doi column gracefully (may not exist in old DBs)
+            doi_val = None
+            try:
+                doi_val = row["doi"]
+            except (IndexError, KeyError):
+                pass
+            
             return IndexedPaper(
                 doc_id=row["doc_id"],
                 title=row["title"],
@@ -377,7 +395,8 @@ class PaperIndex:
                 domains=json.loads(row["domains"] or "{}"),
                 study_type=row["study_type"],
                 source_path=row["source_path"],
-                indexed_at=datetime.fromisoformat(row["indexed_at"])
+                indexed_at=datetime.fromisoformat(row["indexed_at"]),
+                doi=doi_val,
             )
     
     def count(self) -> int:
@@ -410,6 +429,11 @@ class PaperIndex:
             )
             papers = []
             for row in cursor:
+                doi_val = None
+                try:
+                    doi_val = row["doi"]
+                except (IndexError, KeyError):
+                    pass
                 papers.append(IndexedPaper(
                     doc_id=row["doc_id"],
                     title=row["title"],
@@ -423,6 +447,7 @@ class PaperIndex:
                     study_type=row["study_type"],
                     source_path=row["source_path"],
                     indexed_at=datetime.fromisoformat(row["indexed_at"]),
+                    doi=doi_val,
                 ))
             return papers
     

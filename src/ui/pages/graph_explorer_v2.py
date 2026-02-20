@@ -350,16 +350,34 @@ def _build_graph_data(min_connections=0, domain_filter=None, max_nodes=200):
             if records:  # Neo4j has data
                 logger.info(f"Building graph from Neo4j ({len(records)} papers)")
                 
+                # Build title lookup from PaperIndex if Neo4j titles are 'Unknown'
+                title_lookup = {}
+                if any(r["paper_title"] in (None, "Unknown", "") for r in records):
+                    try:
+                        idx = PaperIndex()
+                        all_papers = idx.get_all_papers(limit=500)
+                        title_lookup = {p.doc_id: (p.title, p.year) for p in all_papers}
+                        logger.info(f"Built PaperIndex title lookup ({len(title_lookup)} entries)")
+                    except Exception as e:
+                        logger.warning(f"PaperIndex lookup failed: {e}")
+                
                 for record in records:
                     paper_id = record["paper_id"]
-                    paper_title = record["paper_title"] or "Unknown"
+                    paper_title = record["paper_title"]
                     paper_year = record["paper_year"]
+                    
+                    # Enrich from PaperIndex if title is missing
+                    if not paper_title or paper_title in ("Unknown", ""):
+                        if paper_id in title_lookup:
+                            paper_title, paper_year = title_lookup[paper_id]
+                        else:
+                            paper_title = paper_title or "Untitled"
                     
                     # Add paper node
                     nodes.append(Node(
                         id=paper_id,
                         label=f"{paper_title[:30]}..." if len(paper_title) > 30 else paper_title,
-                        title=f"{paper_title} ({paper_year})",
+                        title=f"{paper_title} ({paper_year or 'N/A'})",
                         color="#4ECDC4",
                         size=20,
                         type="Paper"
@@ -585,8 +603,26 @@ def _render_paper_details_below(doc_id):
         gb.close()
         
         if not metadata:
-            st.warning(f"Paper metadata not found for: {doc_id}")
-            return
+            metadata = {}
+        
+        # ── Enrich from PaperIndex if Neo4j metadata is missing ────
+        title = metadata.get("title")
+        if not title or title in ("Unknown", "Untitled", ""):
+            try:
+                idx = PaperIndex()
+                paper = idx.get_paper(doc_id)
+                if paper:
+                    metadata["title"] = paper.title or title or "Untitled"
+                    metadata["year"] = metadata.get("year") or paper.year
+                    metadata["abstract"] = metadata.get("abstract") or paper.abstract
+                    metadata["doi"] = metadata.get("doi") or paper.doi
+                    if paper.authors and not metadata.get("authors"):
+                        metadata["authors"] = paper.authors if isinstance(paper.authors, list) else [paper.authors]
+                    if paper.keywords and not metadata.get("keywords"):
+                        metadata["keywords"] = paper.keywords
+                    logger.info(f"Enriched paper {doc_id} from PaperIndex: {metadata['title'][:50]}")
+            except Exception as e:
+                logger.warning(f"PaperIndex fallback failed: {e}")
         
         # Paper header
         st.markdown(f"## 📄 {metadata.get('title', 'Untitled')}")
@@ -594,7 +630,7 @@ def _render_paper_details_below(doc_id):
         # Metadata row
         mcol1, mcol2, mcol3, mcol4 = st.columns(4)
         with mcol1:
-            st.metric("Year", metadata.get("year", "N/A"))
+            st.metric("Year", metadata.get("year") or "N/A")
         with mcol2:
             species_list = metadata.get("species", [])
             st.metric("Species", len(species_list))
@@ -606,7 +642,11 @@ def _render_paper_details_below(doc_id):
         
         # Authors
         if metadata.get("authors"):
-            st.markdown(f"**Authors:** {', '.join(metadata['authors'][:5])}")
+            authors = metadata["authors"]
+            if isinstance(authors, list):
+                st.markdown(f"**Authors:** {', '.join(str(a) for a in authors[:5])}")
+            else:
+                st.markdown(f"**Authors:** {authors}")
         
         # DOI
         if metadata.get("doi"):
@@ -635,8 +675,10 @@ def _render_paper_details_below(doc_id):
             st.markdown("---")
             st.markdown("### 📦 Source Text Chunks")
             st.caption(f"{len(chunks_data)} chunks from this paper — the text that generated graph relationships")
-            
             _render_chunks_list(chunks_data, metadata)
+        else:
+            st.markdown("---")
+            st.info("📦 No chunks available. Qdrant may be offline or chunks were not indexed for this paper.")
         
     except Exception as e:
         st.error(f"Failed to load paper details: {e}")
