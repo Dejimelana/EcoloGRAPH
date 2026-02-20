@@ -61,12 +61,15 @@ def render():
     
     with tab_species:
         _render_species_pyvis(papers, graph_available)
+        _render_pyvis_paper_explorer(papers, tab_key="species")
     
     with tab_papers:
         _render_papers_pyvis(papers)
+        _render_pyvis_paper_explorer(papers, tab_key="papers")
     
     with tab_concepts:
         _render_concepts_pyvis(papers)
+        _render_pyvis_paper_explorer(papers, tab_key="concepts")
 
 
 def _check_data_sources():
@@ -1049,6 +1052,62 @@ def _render_location_evidence_chunks(papers, location_name):
 
     if evidence_count == 0:
         st.info("No text chunks found mentioning this location. Chunks may not be indexed in Qdrant.")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Paper Explorer Panel (shared by all Pyvis tabs)
+# ══════════════════════════════════════════════════════════════════
+
+def _render_pyvis_paper_explorer(papers, tab_key: str = "pyvis"):
+    """Render a paper selector + detail/chunk panel below a Pyvis graph.
+    
+    Args:
+        papers: list of IndexedPaper objects or list of dicts with doc_id/title
+        tab_key: unique key suffix for Streamlit widgets
+    """
+    if not papers:
+        return
+
+    st.markdown("---")
+    st.markdown("### 📑 Paper Details & Source Chunks")
+    st.caption("Select a paper to view its full details and text chunks")
+    
+    # Build paper options
+    paper_options = {}
+    for p in papers:
+        if hasattr(p, 'doc_id'):
+            doc_id = p.doc_id
+            title = p.title or "Untitled"
+            year = p.year
+        elif isinstance(p, dict):
+            doc_id = p.get('doc_id', p.get('paper_id', ''))
+            title = p.get('title', 'Untitled')
+            year = p.get('year')
+        else:
+            continue
+        
+        if not doc_id:
+            continue
+        
+        label = f"{title[:70]}{'...' if len(title) > 70 else ''}"
+        if year:
+            label += f" ({year})"
+        paper_options[label] = doc_id
+    
+    if not paper_options:
+        return
+    
+    selected_label = st.selectbox(
+        "Select paper",
+        options=list(paper_options.keys()),
+        key=f"pyvis_paper_select_{tab_key}",
+        index=None,
+        placeholder="Choose a paper to view details & chunks...",
+    )
+    
+    if selected_label:
+        doc_id = paper_options[selected_label]
+        _render_paper_details_below(doc_id)
 
 
 # ══════════════════════════════════════════════════════════════════

@@ -93,6 +93,7 @@ def create_indexed_paper(doc, classification) -> IndexedPaper:
         study_type=classification.study_type.value if classification else None,
         source_path=str(Path(doc.source_path).resolve()) if doc.source_path else None,
         indexed_at=datetime.now(),
+        doi=getattr(doc, 'doi', None),
     )
 
 
@@ -449,23 +450,38 @@ def ingest(
                     logger.warning(f"  ⚠️  Citation extraction failed: {e}")
             
             # Step 7: Build knowledge graph (Neo4j)
-            if graph_builder and extraction_result:
+            if graph_builder:
                 try:
-                    # Add paper node
+                    # Build complete metadata dict for Neo4j
+                    paper_meta = {
+                        'title': indexed.title or doc.title or 'Untitled',
+                        'authors': doc.authors or [],
+                        'year': indexed.year or getattr(doc, 'year', None),
+                        'doi': getattr(doc, 'doi', None),
+                        'abstract': doc.abstract,
+                        'source_path': str(doc.source_path) if doc.source_path else None,
+                    }
+                    
+                    # Always create paper node with full metadata
                     graph_builder.add_paper(
                         doc_id=doc.doc_id,
-                        title=doc.title or "Untitled",
-                        authors=doc.authors,
-                        abstract=doc.abstract,
-                        source_path=str(doc.source_path),
-                    )
-                    # Add extraction results
-                    graph_builder.add_extraction_result(
-                        doc_id=doc.doc_id,
-                        result=extraction_result,
+                        title=paper_meta['title'],
+                        authors=paper_meta['authors'],
+                        year=paper_meta['year'],
+                        doi=paper_meta['doi'],
+                        abstract=paper_meta['abstract'],
+                        source_path=paper_meta['source_path'],
                     )
                     
-                    # Add citations (NEW)
+                    # Add extraction results (entities/relations) WITH metadata
+                    if extraction_result:
+                        graph_builder.add_extraction_result(
+                            doc_id=doc.doc_id,
+                            result=extraction_result,
+                            paper_metadata=paper_meta,
+                        )
+                    
+                    # Add citations
                     if citations:
                         graph_builder.add_citations(doc.doc_id, citations)
                     
