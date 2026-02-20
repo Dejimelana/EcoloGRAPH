@@ -45,12 +45,12 @@ def render():
         return
     
     # --- View Mode Tabs ---
-    tab_interactive, tab_species, tab_papers, tab_concepts = st.tabs([
-        "🎯 Interactive Explorer", "🔬 Species Graph",
-        "📄 Paper Connections", "🔗 Concept Map"
+    tabs = st.tabs([
+        "🎯 Explorer", "🔬 Species", "🏷️ Domains", "📄 Papers",
+        "🔧 Methodology", "👤 Authors", "📍 Locations"
     ])
     
-    with tab_interactive:
+    with tabs[0]:  # Explorer (existing)
         if not graph_available:
             st.warning("⚠️ Neo4j not available. Some features will be limited.")
         else:
@@ -59,17 +59,23 @@ def render():
                 st.markdown("---")
                 _render_node_details_panel()
     
-    with tab_species:
-        _render_species_pyvis(papers, graph_available)
-        _render_pyvis_paper_explorer(papers, tab_key="species")
+    with tabs[1]:  # Species
+        _render_tab_species(graph_available)
     
-    with tab_papers:
-        _render_papers_pyvis(papers)
-        _render_pyvis_paper_explorer(papers, tab_key="papers")
+    with tabs[2]:  # Domains
+        _render_tab_domains(papers)
     
-    with tab_concepts:
-        _render_concepts_pyvis(papers)
-        _render_pyvis_paper_explorer(papers, tab_key="concepts")
+    with tabs[3]:  # Papers
+        _render_tab_papers(papers, graph_available)
+    
+    with tabs[4]:  # Methodology 
+        _render_tab_methodology(papers)
+    
+    with tabs[5]:  # Authors
+        _render_tab_authors(papers)
+    
+    with tabs[6]:  # Locations
+        _render_tab_locations(graph_available)
 
 
 def _check_data_sources():
@@ -1054,60 +1060,585 @@ def _render_location_evidence_chunks(papers, location_name):
         st.info("No text chunks found mentioning this location. Chunks may not be indexed in Qdrant.")
 
 
+
 # ══════════════════════════════════════════════════════════════════
-#  Paper Explorer Panel (shared by all Pyvis tabs)
+#  Agraph Tab Config Helper
 # ══════════════════════════════════════════════════════════════════
 
-def _render_pyvis_paper_explorer(papers, tab_key: str = "pyvis"):
-    """Render a paper selector + detail/chunk panel below a Pyvis graph.
-    
-    Args:
-        papers: list of IndexedPaper objects or list of dicts with doc_id/title
-        tab_key: unique key suffix for Streamlit widgets
-    """
-    if not papers:
-        return
-
-    st.markdown("---")
-    st.markdown("### 📑 Paper Details & Source Chunks")
-    st.caption("Select a paper to view its full details and text chunks")
-    
-    # Build paper options
-    paper_options = {}
-    for p in papers:
-        if hasattr(p, 'doc_id'):
-            doc_id = p.doc_id
-            title = p.title or "Untitled"
-            year = p.year
-        elif isinstance(p, dict):
-            doc_id = p.get('doc_id', p.get('paper_id', ''))
-            title = p.get('title', 'Untitled')
-            year = p.get('year')
-        else:
-            continue
-        
-        if not doc_id:
-            continue
-        
-        label = f"{title[:70]}{'...' if len(title) > 70 else ''}"
-        if year:
-            label += f" ({year})"
-        paper_options[label] = doc_id
-    
-    if not paper_options:
-        return
-    
-    selected_label = st.selectbox(
-        "Select paper",
-        options=list(paper_options.keys()),
-        key=f"pyvis_paper_select_{tab_key}",
-        index=None,
-        placeholder="Choose a paper to view details & chunks...",
+def _tab_agraph_config(height=550):
+    """Return a standard agraph Config for themed tabs."""
+    return Config(
+        width="100%",
+        height=height,
+        directed=False,
+        physics={
+            "enabled": True,
+            "solver": "forceAtlas2Based",
+            "forceAtlas2Based": {
+                "gravitationalConstant": -40000,
+                "centralGravity": 0.35,
+                "springLength": 160,
+                "springConstant": 0.04,
+                "damping": 0.09,
+                "avoidOverlap": 0.5,
+            },
+            "stabilization": {"iterations": 120},
+        },
+        hierarchical=False,
+        nodeHighlightBehavior=True,
+        highlightColor="#FF6B6B",
+        collapsible=True,
+        node={"labelProperty": "label"},
+        link={"labelProperty": "label", "renderLabel": False},
     )
+
+
+def _handle_tab_selection(selected, prefix, default_type="Paper"):
+    """Handle agraph node selection for specialized tabs.
     
-    if selected_label:
-        doc_id = paper_options[selected_label]
-        _render_paper_details_below(doc_id)
+    Returns (node_id, node_type) or (None, None) if nothing selected.
+    """
+    if not selected:
+        return None, None
+    
+    node_id = selected
+    # Determine type by prefix
+    if node_id.startswith("species_"):
+        return node_id.replace("species_", ""), "Species"
+    elif node_id.startswith("location_"):
+        return node_id.replace("location_", ""), "Location"
+    elif node_id.startswith("domain_"):
+        return node_id.replace("domain_", ""), "Domain"
+    elif node_id.startswith("method_"):
+        return node_id.replace("method_", ""), "Methodology"
+    elif node_id.startswith("author_"):
+        return node_id.replace("author_", ""), "Author"
+    else:
+        return node_id, default_type
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Tab 1: Species Co-occurrence
+# ══════════════════════════════════════════════════════════════════
+
+def _render_tab_species(graph_available):
+    """Species co-occurrence graph using agraph."""
+    st.markdown("### 🔬 Species Co-occurrence Network")
+    st.caption("Species that appear together in papers are connected. Click a node to see details.")
+
+    if not graph_available:
+        st.warning("⚠️ Neo4j not available — species graph requires entity data.")
+        return
+
+    max_sp = st.slider("Max species", 20, 200, 80, key="sp_max")
+
+    try:
+        gb = GraphBuilder()
+        nodes, edges = [], []
+
+        with gb._driver.session(database=gb.database) as session:
+            # Top species by paper count
+            sp_result = session.run("""
+                MATCH (p:Paper)-[:MENTIONS]->(s:Species)
+                WITH s, count(DISTINCT p) AS cnt
+                ORDER BY cnt DESC LIMIT $limit
+                RETURN s.scientific_name AS name, cnt
+            """, limit=max_sp)
+            species_list = [dict(r) for r in sp_result]
+
+            for sp in species_list:
+                nodes.append(Node(
+                    id=f"species_{sp['name']}",
+                    label=sp["name"],
+                    title=f"{sp['name']}\n{sp['cnt']} papers",
+                    color="#FF6B6B",
+                    size=10 + min(sp["cnt"] * 2, 20),
+                    type="Species",
+                ))
+
+            # Co-occurrences
+            names = [sp["name"] for sp in species_list]
+            cooccur = session.run("""
+                MATCH (s1:Species)<-[:MENTIONS]-(p:Paper)-[:MENTIONS]->(s2:Species)
+                WHERE s1.scientific_name IN $names AND s2.scientific_name IN $names
+                  AND id(s1) < id(s2)
+                WITH s1.scientific_name AS sp1, s2.scientific_name AS sp2,
+                     count(DISTINCT p) AS shared
+                WHERE shared >= 1
+                RETURN sp1, sp2, shared
+                ORDER BY shared DESC LIMIT 300
+            """, names=names)
+            for r in cooccur:
+                edges.append(Edge(
+                    source=f"species_{r['sp1']}",
+                    target=f"species_{r['sp2']}",
+                    label=f"{r['shared']}",
+                    color="#FFD93D",
+                    width=1 + min(r["shared"], 5),
+                ))
+        gb.close()
+
+        if not nodes:
+            st.info("No species found in the graph.")
+            return
+
+        st.caption(f"📊 {len(nodes)} species · {len(edges)} co-occurrences")
+        selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config(),
+                          key="species_agraph")
+
+        node_id, node_type = _handle_tab_selection(selected, "species_", "Species")
+        if node_id:
+            st.markdown("---")
+            _render_species_details_below(node_id)
+
+    except Exception as e:
+        st.error(f"Species graph error: {e}")
+        logger.exception("Species tab error")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Tab 2: Domain Clusters
+# ══════════════════════════════════════════════════════════════════
+
+def _render_tab_domains(papers):
+    """Domain cluster graph using agraph — papers grouped by classification."""
+    import json
+
+    st.markdown("### 🏷️ Domain Clusters")
+    st.caption("Papers clustered by their scientific domain. Click a domain or paper to explore.")
+
+    if not papers:
+        st.info("No papers indexed yet.")
+        return
+
+    max_papers = st.slider("Max papers", 20, 200, 80, key="dom_max")
+    min_score = st.slider("Min domain score", 0.05, 0.50, 0.15, 0.05, key="dom_score",
+                          help="Only show domains above this classification score")
+
+    nodes, edges = [], []
+    domain_set = set()
+
+    for p in papers[:max_papers]:
+        # Paper node
+        label = f"{p.title[:28]}..." if len(p.title) > 28 else p.title
+        nodes.append(Node(
+            id=p.doc_id,
+            label=label,
+            title=f"{p.title} ({p.year or 'N/A'})",
+            color="#4ECDC4",
+            size=16,
+            type="Paper",
+        ))
+
+        # Domain edges
+        if p.domains:
+            domains = json.loads(p.domains) if isinstance(p.domains, str) else p.domains
+            for domain, score in domains.items():
+                if score >= min_score:
+                    domain_id = f"domain_{domain}"
+                    domain_set.add((domain_id, domain))
+                    edges.append(Edge(
+                        source=p.doc_id,
+                        target=domain_id,
+                        label="",
+                    ))
+
+    # Domain nodes
+    for domain_id, domain_name in domain_set:
+        connected = sum(1 for e in edges if getattr(e, 'to', None) == domain_id or e.source == domain_id)
+        nodes.append(Node(
+            id=domain_id,
+            label=domain_name.replace("_", " ").title(),
+            title=f"Domain: {domain_name}\n{connected} papers",
+            color="#95E1D3",
+            size=15 + min(connected, 20),
+            type="Domain",
+        ))
+
+    if not nodes:
+        st.info("No domain data available.")
+        return
+
+    st.caption(f"📊 {len(papers[:max_papers])} papers · {len(domain_set)} domains")
+    selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config(),
+                      key="domains_agraph")
+
+    node_id, node_type = _handle_tab_selection(selected, "domain_", "Paper")
+    if node_id:
+        st.markdown("---")
+        if node_type == "Domain":
+            _render_domain_details_below(node_id)
+        else:
+            _render_paper_details_below(node_id)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Tab 3: Paper Network
+# ══════════════════════════════════════════════════════════════════
+
+def _render_tab_papers(papers, graph_available):
+    """Paper network — papers connected by shared species/locations."""
+    st.markdown("### 📄 Paper Network")
+    st.caption("Papers connected by shared species or locations. Click a paper to see details & chunks.")
+
+    if not papers:
+        st.info("No papers indexed yet.")
+        return
+
+    max_p = st.slider("Max papers", 20, 150, 60, key="pap_max")
+
+    nodes, edges = [], []
+    title_lookup = {p.doc_id: p for p in papers}
+
+    if graph_available:
+        try:
+            gb = GraphBuilder()
+            with gb._driver.session(database=gb.database) as session:
+                # Get papers with their species lists
+                result = session.run("""
+                    MATCH (p:Paper)-[:MENTIONS]->(s:Species)
+                    WITH p, collect(DISTINCT s.scientific_name) AS species
+                    RETURN p.doc_id AS doc_id, p.title AS title, p.year AS year, species
+                    ORDER BY size(species) DESC LIMIT $limit
+                """, limit=max_p)
+                records = [dict(r) for r in result]
+
+            gb.close()
+
+            if records:
+                # Paper nodes
+                for rec in records:
+                    doc_id = rec["doc_id"]
+                    title = rec["title"] or (title_lookup[doc_id].title if doc_id in title_lookup else "Untitled")
+                    label = f"{title[:28]}..." if len(title) > 28 else title
+                    nodes.append(Node(
+                        id=doc_id,
+                        label=label,
+                        title=f"{title} ({rec.get('year') or 'N/A'})\n{len(rec['species'])} species",
+                        color="#4ECDC4",
+                        size=14 + min(len(rec["species"]), 15),
+                        type="Paper",
+                    ))
+
+                # Shared species edges
+                for i, r1 in enumerate(records):
+                    s1 = set(r1["species"])
+                    for j in range(i + 1, len(records)):
+                        s2 = set(records[j]["species"])
+                        shared = s1 & s2
+                        if shared:
+                            edges.append(Edge(
+                                source=r1["doc_id"],
+                                target=records[j]["doc_id"],
+                                label=f"{len(shared)} shared",
+                                color="#FFD93D",
+                                width=1 + min(len(shared), 5),
+                            ))
+        except Exception as e:
+            logger.warning(f"Neo4j paper network error: {e}")
+
+    # PaperIndex fallback
+    if not nodes:
+        for p in papers[:max_p]:
+            label = f"{p.title[:28]}..." if len(p.title) > 28 else p.title
+            nodes.append(Node(
+                id=p.doc_id,
+                label=label,
+                title=f"{p.title} ({p.year or 'N/A'})",
+                color="#4ECDC4",
+                size=16,
+                type="Paper",
+            ))
+
+    if not nodes:
+        st.info("No papers available.")
+        return
+
+    st.caption(f"📊 {len(nodes)} papers · {len(edges)} connections")
+    selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config(),
+                      key="papers_agraph")
+
+    node_id, node_type = _handle_tab_selection(selected, "paper_", "Paper")
+    if node_id:
+        st.markdown("---")
+        _render_paper_details_below(node_id)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Tab 4: Methodology (Study Type)
+# ══════════════════════════════════════════════════════════════════
+
+def _render_tab_methodology(papers):
+    """Study type / methodology clusters."""
+    st.markdown("### 🔧 Methodology Network")
+    st.caption("Papers grouped by study type (field, laboratory, review, etc). Click to explore.")
+
+    if not papers:
+        st.info("No papers indexed yet.")
+        return
+
+    nodes, edges = [], []
+    method_papers = {}  # method → [IndexedPaper]
+
+    for p in papers:
+        study_type = p.study_type or "unknown"
+        method_papers.setdefault(study_type, []).append(p)
+
+    # Method nodes
+    for method, mpapers in method_papers.items():
+        method_id = f"method_{method}"
+        nodes.append(Node(
+            id=method_id,
+            label=method.replace("_", " ").title(),
+            title=f"Methodology: {method}\n{len(mpapers)} papers",
+            color="#F59E0B",
+            size=18 + min(len(mpapers), 20),
+            type="Methodology",
+        ))
+
+        # Paper nodes + edges
+        for p in mpapers:
+            label = f"{p.title[:28]}..." if len(p.title) > 28 else p.title
+            if not any(n.id == p.doc_id for n in nodes):
+                nodes.append(Node(
+                    id=p.doc_id,
+                    label=label,
+                    title=f"{p.title} ({p.year or 'N/A'})",
+                    color="#4ECDC4",
+                    size=14,
+                    type="Paper",
+                ))
+            edges.append(Edge(source=p.doc_id, target=method_id, label=""))
+
+    if not nodes:
+        st.info("No methodology data available.")
+        return
+
+    st.caption(f"📊 {len(papers)} papers · {len(method_papers)} study types")
+    selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config(),
+                      key="method_agraph")
+
+    node_id, node_type = _handle_tab_selection(selected, "method_", "Paper")
+    if node_id:
+        st.markdown("---")
+        if node_type == "Methodology":
+            _render_methodology_details_below(node_id, method_papers.get(node_id, []))
+        else:
+            _render_paper_details_below(node_id)
+
+
+def _render_methodology_details_below(method_name, papers):
+    """Render methodology detail panel."""
+    st.markdown(f"## 🔧 {method_name.replace('_', ' ').title()}")
+    st.metric("Papers", len(papers))
+
+    if papers:
+        with st.expander(f"📄 Papers ({len(papers)})", expanded=True):
+            for i, p in enumerate(papers[:25]):
+                pcol1, pcol2 = st.columns([5, 1])
+                with pcol1:
+                    st.markdown(f"**{p.title}** ({p.year or 'N/A'})")
+                with pcol2:
+                    if st.button("📖", key=f"meth_p_{i}_{p.doc_id}", help="View paper"):
+                        st.session_state.selected_node = p.doc_id
+                        st.session_state.selected_node_type = "Paper"
+                        st.rerun()
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Tab 5: Authors
+# ══════════════════════════════════════════════════════════════════
+
+def _render_tab_authors(papers):
+    """Author collaboration network using agraph."""
+    import json
+
+    st.markdown("### 👤 Author Collaboration Network")
+    st.caption("Authors connected by co-authored papers. Click a node to see details.")
+
+    if not papers:
+        st.info("No papers indexed yet.")
+        return
+
+    max_authors = st.slider("Max authors", 20, 200, 80, key="auth_max")
+
+    # Build author → papers mapping
+    author_papers = {}  # author_name → [IndexedPaper]
+    for p in papers:
+        authors = p.authors
+        if isinstance(authors, str):
+            try:
+                authors = json.loads(authors)
+            except (json.JSONDecodeError, TypeError):
+                authors = [authors] if authors else []
+        if not authors:
+            continue
+        for a in authors:
+            a_clean = a.strip()
+            if a_clean and len(a_clean) > 2:
+                author_papers.setdefault(a_clean, []).append(p)
+
+    if not author_papers:
+        st.info("No author data available.")
+        return
+
+    # Take top authors by paper count
+    top_authors = sorted(author_papers.items(), key=lambda x: -len(x[1]))[:max_authors]
+    top_names = {name for name, _ in top_authors}
+
+    nodes, edges = [], []
+
+    for name, apapers in top_authors:
+        author_id = f"author_{name}"
+        nodes.append(Node(
+            id=author_id,
+            label=name if len(name) <= 25 else name[:22] + "...",
+            title=f"Author: {name}\n{len(apapers)} papers",
+            color="#A78BFA",
+            size=10 + min(len(apapers) * 3, 20),
+            type="Author",
+        ))
+
+    # Collaboration edges (shared papers)
+    top_list = list(top_authors)
+    for i, (name1, papers1) in enumerate(top_list):
+        ids1 = {p.doc_id for p in papers1}
+        for j in range(i + 1, len(top_list)):
+            name2, papers2 = top_list[j]
+            ids2 = {p.doc_id for p in papers2}
+            shared = ids1 & ids2
+            if shared:
+                edges.append(Edge(
+                    source=f"author_{name1}",
+                    target=f"author_{name2}",
+                    label=f"{len(shared)}",
+                    color="#C4B5FD",
+                    width=1 + min(len(shared), 5),
+                ))
+
+    st.caption(f"📊 {len(nodes)} authors · {len(edges)} collaborations")
+    selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config(),
+                      key="authors_agraph")
+
+    node_id, node_type = _handle_tab_selection(selected, "author_", "Author")
+    if node_id:
+        st.markdown("---")
+        _render_author_details_below(node_id, author_papers.get(node_id, []))
+
+
+def _render_author_details_below(author_name, papers):
+    """Render author detail panel."""
+    st.markdown(f"## 👤 {author_name}")
+    st.metric("Papers", len(papers))
+
+    if papers:
+        with st.expander(f"📄 Papers by {author_name} ({len(papers)})", expanded=True):
+            for i, p in enumerate(papers[:25]):
+                pcol1, pcol2 = st.columns([5, 1])
+                with pcol1:
+                    st.markdown(f"**{p.title}** ({p.year or 'N/A'})")
+                with pcol2:
+                    if st.button("📖", key=f"auth_p_{i}_{p.doc_id}", help="View paper"):
+                        st.session_state.selected_node = p.doc_id
+                        st.session_state.selected_node_type = "Paper"
+                        st.rerun()
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Tab 6: Locations
+# ══════════════════════════════════════════════════════════════════
+
+def _render_tab_locations(graph_available):
+    """Location network using agraph — locations connected to papers with year info."""
+    st.markdown("### 📍 Location Network")
+    st.caption("Geographic locations referenced in papers. Click to explore.")
+
+    if not graph_available:
+        st.warning("⚠️ Neo4j not available — location graph requires entity data.")
+        return
+
+    max_locs = st.slider("Max locations", 20, 200, 80, key="loc_max")
+
+    try:
+        gb = GraphBuilder()
+        nodes, edges = [], []
+
+        with gb._driver.session(database=gb.database) as session:
+            result = session.run("""
+                MATCH (p:Paper)-[:REFERENCES_LOCATION]->(l:Location)
+                WITH l, collect(DISTINCT p) AS papers, count(DISTINCT p) AS cnt
+                ORDER BY cnt DESC LIMIT $limit
+                RETURN l.location_id AS loc_id, l.name AS name,
+                       l.country AS country, l.habitat_type AS habitat, cnt,
+                       [pp in papers | {doc_id: pp.doc_id, title: pp.title, year: pp.year}] AS papers
+            """, limit=max_locs)
+            records = [dict(r) for r in result]
+
+        gb.close()
+
+        if not records:
+            st.info("No locations found in the graph.")
+            return
+
+        # Location nodes
+        paper_ids_seen = set()
+        for rec in records:
+            loc_id = f"location_{rec['loc_id']}"
+            loc_name = rec["name"] or rec["loc_id"]
+            tooltip = f"Location: {loc_name}"
+            if rec.get("country"):
+                tooltip += f"\nCountry: {rec['country']}"
+            if rec.get("habitat"):
+                tooltip += f"\nHabitat: {rec['habitat']}"
+            tooltip += f"\n{rec['cnt']} papers"
+
+            nodes.append(Node(
+                id=loc_id,
+                label=loc_name if len(loc_name) <= 20 else loc_name[:17] + "...",
+                title=tooltip,
+                color="#F7B731",
+                size=10 + min(rec["cnt"] * 2, 20),
+                type="Location",
+            ))
+
+            # Connected paper nodes
+            for p in rec["papers"][:10]:
+                doc_id = p["doc_id"]
+                if doc_id not in paper_ids_seen:
+                    paper_ids_seen.add(doc_id)
+                    title = p.get("title") or "Untitled"
+                    year = p.get("year")
+                    label = f"{title[:25]}..." if len(title) > 25 else title
+                    nodes.append(Node(
+                        id=doc_id,
+                        label=label,
+                        title=f"{title} ({year or 'N/A'})",
+                        color="#4ECDC4",
+                        size=14,
+                        type="Paper",
+                    ))
+                edges.append(Edge(
+                    source=doc_id,
+                    target=loc_id,
+                    label=str(p.get("year") or ""),
+                ))
+
+        st.caption(f"📊 {len(records)} locations · {len(paper_ids_seen)} papers")
+        selected = agraph(nodes=nodes, edges=edges, config=_tab_agraph_config(),
+                          key="locations_agraph")
+
+        node_id, node_type = _handle_tab_selection(selected, "location_", "Paper")
+        if node_id:
+            st.markdown("---")
+            if node_type == "Location":
+                _render_location_details_below(node_id)
+            else:
+                _render_paper_details_below(node_id)
+
+    except Exception as e:
+        st.error(f"Location graph error: {e}")
+        logger.exception("Locations tab error")
+
 
 
 # ══════════════════════════════════════════════════════════════════
