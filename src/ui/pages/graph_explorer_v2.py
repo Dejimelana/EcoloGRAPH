@@ -44,17 +44,29 @@ def render():
         )
         return
     
-    if not graph_available:
-        st.warning("⚠️ Neo4j not available. Some features will be limited.")
-        return
+    # --- View Mode Tabs ---
+    tab_interactive, tab_species, tab_papers, tab_concepts = st.tabs([
+        "🎯 Interactive Explorer", "🔬 Species Graph",
+        "📄 Paper Connections", "🔗 Concept Map"
+    ])
     
-    # Full-width graph
-    _render_graph_panel(graph_available)
+    with tab_interactive:
+        if not graph_available:
+            st.warning("⚠️ Neo4j not available. Some features will be limited.")
+        else:
+            _render_graph_panel(graph_available)
+            if st.session_state.selected_node:
+                st.markdown("---")
+                _render_node_details_panel()
     
-    # Node details + chunks BELOW the graph (scrollable)
-    if st.session_state.selected_node:
-        st.markdown("---")
-        _render_node_details_panel()
+    with tab_species:
+        _render_species_pyvis(papers, graph_available)
+    
+    with tab_papers:
+        _render_papers_pyvis(papers)
+    
+    with tab_concepts:
+        _render_concepts_pyvis(papers)
 
 
 def _check_data_sources():
@@ -875,4 +887,344 @@ def _render_species_evidence_chunks(gb, scientific_name, papers):
     
     if evidence_count == 0:
         st.info("No text chunks found mentioning this species. Chunks may not be indexed in Qdrant.")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Pyvis-based Graph Views (ported from V1)
+# ══════════════════════════════════════════════════════════════════
+
+def _create_pyvis():
+    """Create a configured Pyvis Network instance."""
+    from pyvis.network import Network
+
+    net = Network(
+        notebook=False,
+        bgcolor="#0f172a",
+        font_color="#e2e8f0",
+        height="580px",
+        width="100%",
+        cdn_resources="remote",
+        select_menu=False,
+        filter_menu=False,
+    )
+    net.force_atlas_2based(
+        gravity=-80,
+        central_gravity=0.005,
+        spring_length=250,
+        spring_strength=0.02,
+        damping=0.9,
+        overlap=0,
+    )
+    net.set_options("""
+    {
+        "interaction": {
+            "hover": true,
+            "tooltipDelay": 100,
+            "zoomView": true,
+            "dragView": true,
+            "navigationButtons": false
+        },
+        "physics": {
+            "enabled": true,
+            "stabilization": {
+                "enabled": true,
+                "iterations": 500,
+                "fit": true
+            },
+            "forceAtlas2Based": {
+                "gravitationalConstant": -80,
+                "centralGravity": 0.005,
+                "springLength": 250,
+                "springConstant": 0.02,
+                "damping": 0.9,
+                "avoidOverlap": 0.5
+            },
+            "minVelocity": 0.75,
+            "solver": "forceAtlas2Based"
+        }
+    }
+    """)
+    return net
+
+
+def _render_pyvis(net):
+    """Render a Pyvis Network in Streamlit."""
+    import streamlit.components.v1 as components
+
+    html = net.generate_html()
+    tooltip_css = """
+    <style>
+    body { margin: 0; overflow: hidden; }
+    div.vis-tooltip {
+        background: #1e293b !important;
+        border: 1px solid #334155 !important;
+        color: #e2e8f0 !important;
+        border-radius: 6px !important;
+        padding: 8px 12px !important;
+        font-family: Inter, sans-serif !important;
+        font-size: 12px !important;
+        white-space: pre-line !important;
+        max-width: 300px !important;
+    }
+    </style>
+    """
+    html = html.replace("</head>", tooltip_css + "</head>")
+    components.html(html, height=600, scrolling=False)
+
+
+# ── Species Graph ──────────────────────────────────────────────
+
+def _render_species_pyvis(papers, graph_available):
+    """Render species graph from Neo4j or inferred from keywords."""
+    st.markdown("### Species Interaction Network")
+
+    max_nodes = st.slider("Max species nodes", 10, 80, 40, key="species_max_nodes")
+
+    if graph_available:
+        st.caption("Species connections from the Neo4j knowledge graph")
+        _species_from_neo4j(max_nodes)
+    else:
+        st.caption("Species co-occurrence inferred from paper keywords (Neo4j offline)")
+        _species_from_keywords(papers, max_nodes)
+
+
+def _species_from_neo4j(max_nodes):
+    """Render species graph from Neo4j data."""
+    try:
+        from src.graph.network_analysis import detect_communities, community_color
+        import networkx as nx
+
+        gb = GraphBuilder()
+        G = nx.Graph()
+
+        with gb._driver.session(database=gb.database) as session:
+            result = session.run("""
+                MATCH (p:Paper)-[:MENTIONS]->(s:Species)
+                WITH s, collect(p) as papers, count(p) as paper_count
+                ORDER BY paper_count DESC LIMIT $limit
+                RETURN s.scientific_name as name, paper_count,
+                       [p in papers | p.title][..3] as paper_titles
+            """, limit=max_nodes)
+
+            for record in result:
+                G.add_node(record["name"], label=record["name"],
+                           count=record["paper_count"],
+                           papers=record["paper_titles"],
+                           node_type="species")
+
+            result2 = session.run("""
+                MATCH (s1:Species)<-[:MENTIONS]-(p:Paper)-[:MENTIONS]->(s2:Species)
+                WHERE id(s1) < id(s2)
+                WITH s1.scientific_name AS sp1, s2.scientific_name AS sp2,
+                     COUNT(DISTINCT p) AS shared
+                WHERE shared >= 1
+                RETURN sp1, sp2, shared
+                ORDER BY shared DESC LIMIT 100
+            """)
+            for record in result2:
+                if record["sp1"] in G and record["sp2"] in G:
+                    G.add_edge(record["sp1"], record["sp2"],
+                               weight=record["shared"],
+                               title=f"{record['shared']} shared papers")
+
+        gb.close()
+
+        if G.number_of_nodes() == 0:
+            st.info("No species found in the graph database.")
+            return
+
+        communities = detect_communities(G)
+        net = _create_pyvis()
+
+        for node_id, data in G.nodes(data=True):
+            comm = communities.get(node_id, 0)
+            size = 8 + data.get("count", 1) * 3
+            papers_str = "\n".join(data.get("papers", [])[:3])
+            net.add_node(
+                str(node_id), label=data.get("label", str(node_id)),
+                title=f"{node_id}\n{data.get('count', 0)} papers\n{papers_str}",
+                size=size, color=community_color(comm),
+                font={"size": 10, "color": "#e2e8f0"},
+            )
+
+        for u, v, data in G.edges(data=True):
+            net.add_edge(str(u), str(v), title=data.get("title", ""),
+                         color={"color": "#f59e0b80"}, width=1.5)
+
+        _render_pyvis(net)
+        st.caption(f"📊 {G.number_of_nodes()} species · {G.number_of_edges()} co-occurrences")
+
+    except Exception as e:
+        st.warning(f"Neo4j query error: {e}")
+        logger.exception("Species graph Neo4j error")
+
+
+def _species_from_keywords(papers, max_nodes):
+    """Infer species from keywords and build co-occurrence graph."""
+    from src.graph.network_analysis import detect_communities, community_color
+    import networkx as nx
+
+    species_papers = {}
+    for p in papers:
+        for kw in p.keywords:
+            if len(kw.split()) >= 2 and kw[0].isupper():
+                species_papers.setdefault(kw, []).append(p.doc_id)
+
+    if not species_papers:
+        st.info("No species-like keywords found.")
+        return
+
+    G = nx.Graph()
+    sorted_species = sorted(species_papers.items(), key=lambda x: -len(x[1]))[:max_nodes]
+
+    for sp_name, doc_ids in sorted_species:
+        G.add_node(sp_name, label=sp_name, count=len(doc_ids), node_type="species")
+
+    for i, (name1, docs1) in enumerate(sorted_species):
+        for j in range(i + 1, len(sorted_species)):
+            name2, docs2 = sorted_species[j]
+            shared = set(docs1) & set(docs2)
+            if shared:
+                G.add_edge(name1, name2, weight=len(shared),
+                           title=f"{len(shared)} shared papers")
+
+    communities = detect_communities(G)
+    net = _create_pyvis()
+
+    for node_id, data in G.nodes(data=True):
+        comm = communities.get(node_id, 0)
+        size = 8 + data.get("count", 1) * 2
+        net.add_node(
+            str(node_id), label=data.get("label", str(node_id)),
+            title=f"{node_id}\n{data.get('count', 0)} papers",
+            size=size, color=community_color(comm),
+            font={"size": 10, "color": "#e2e8f0"},
+        )
+
+    for u, v, data in G.edges(data=True):
+        w = data.get("weight", 1)
+        net.add_edge(str(u), str(v), width=max(0.5, w * 1.5),
+                     title=data.get("title", ""),
+                     color={"color": "#ffffff25"})
+
+    _render_pyvis(net)
+    st.caption(f"📊 {G.number_of_nodes()} species · {G.number_of_edges()} co-occurrences")
+
+
+# ── Paper Connections ──────────────────────────────────────────
+
+def _render_papers_pyvis(papers):
+    """Render paper similarity network with community coloring."""
+    st.markdown("### Paper Similarity Network")
+    st.caption("Papers connected by shared keywords/domains. Color = community, size = centrality.")
+
+    max_nodes = st.slider("Max papers", 10, 80, 40, key="papers_max_nodes")
+
+    from src.graph.network_analysis import (
+        build_paper_graph, detect_communities, compute_centrality,
+        community_color,
+    )
+
+    G = build_paper_graph(papers[:max_nodes], min_similarity=0.45)
+
+    if G.number_of_nodes() == 0:
+        st.info("Not enough papers to build similarity network.")
+        return
+
+    communities = detect_communities(G)
+    centrality = compute_centrality(G)
+
+    net = _create_pyvis()
+
+    for node_id, data in G.nodes(data=True):
+        comm = communities.get(node_id, 0)
+        cent = centrality.get(node_id, 0)
+        c = community_color(comm)
+        size = 8 + cent * 40
+        label = data.get("label", str(node_id)[:20])
+        title = (f"{data.get('full_title', label)}\n"
+                 f"{data.get('year', '')} · {data.get('domain', '')}\n"
+                 f"Community {comm + 1}")
+
+        net.add_node(
+            str(node_id), label=label, title=title,
+            size=size, color=c, font={"size": 9, "color": "#e2e8f0"},
+        )
+
+    for u, v, data in G.edges(data=True):
+        w = data.get("weight", 0.5)
+        kws = data.get("shared_domains", [])
+        title = ", ".join(d.replace('_', ' ') for d in kws[:3]) if kws else ""
+        net.add_edge(str(u), str(v), width=max(0.5, w * 2), title=title,
+                     color={"color": "#ffffff20", "opacity": 0.3})
+
+    _render_pyvis(net)
+
+    n_communities = len(set(communities.values())) if communities else 0
+    st.caption(f"📊 {G.number_of_nodes()} papers · {G.number_of_edges()} connections · {n_communities} communities")
+
+
+# ── Concept Map ────────────────────────────────────────────────
+
+def _render_concepts_pyvis(papers):
+    """Render keyword co-occurrence concept map."""
+    import math
+
+    st.markdown("### Concept Map (Domain & Keyword Co-occurrence)")
+    st.caption(
+        "Concepts that appear together across papers are connected. "
+        "Size = paper count (log-scaled). Color = community cluster."
+    )
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        max_nodes = st.slider("Max concepts", 10, 80, 40, key="concepts_max_nodes")
+    with col_b:
+        min_co = st.slider("Min co-occurrence", 2, 15, 5, key="concept_min_co",
+                           help="Minimum papers where two concepts must co-occur")
+
+    from src.graph.network_analysis import (
+        build_concept_graph, detect_communities, compute_centrality,
+        community_color,
+    )
+
+    G = build_concept_graph(papers, min_cooccurrence=min_co)
+
+    if G.number_of_nodes() > max_nodes:
+        top_nodes = sorted(G.nodes, key=lambda n: G.degree(n), reverse=True)[:max_nodes]
+        G = G.subgraph(top_nodes).copy()
+
+    if G.number_of_nodes() == 0:
+        st.info("No concept co-occurrences found. Try lowering the minimum co-occurrence.")
+        return
+
+    communities = detect_communities(G)
+    centrality = compute_centrality(G)
+
+    net = _create_pyvis()
+
+    for node_id, data in G.nodes(data=True):
+        comm = communities.get(node_id, 0)
+        c = community_color(comm)
+        paper_count = data.get("paper_count", 1)
+        size = min(25, 6 + math.log2(1 + paper_count) * 4)
+        label = data.get("label", str(node_id))
+        title = f"{label}\n{paper_count} papers · Community {comm + 1}"
+
+        net.add_node(
+            str(node_id), label=label, title=title,
+            size=size, color=c, font={"size": 9, "color": "#e2e8f0"},
+        )
+
+    for u, v, data in G.edges(data=True):
+        w = data.get("weight", 1)
+        net.add_edge(str(u), str(v), width=min(3, max(0.3, w * 0.5)),
+                     title=data.get("title", ""),
+                     color={"color": "#ffffff18"})
+
+    _render_pyvis(net)
+
+    n_communities = len(set(communities.values())) if communities else 0
+    st.caption(f"📊 {G.number_of_nodes()} concepts · {G.number_of_edges()} links · {n_communities} clusters")
+
 
