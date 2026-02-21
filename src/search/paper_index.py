@@ -177,6 +177,22 @@ class PaperIndex:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_domain ON papers(primary_domain)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_journal ON papers(journal)")
             
+            # Chunks table — SQLite fallback for Qdrant
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS chunks (
+                    chunk_id TEXT PRIMARY KEY,
+                    doc_id TEXT NOT NULL,
+                    text TEXT NOT NULL,
+                    section TEXT,
+                    page INTEGER,
+                    chunk_idx INTEGER DEFAULT 0,
+                    word_count INTEGER DEFAULT 0,
+                    FOREIGN KEY (doc_id) REFERENCES papers(doc_id)
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_chunks_doc ON chunks(doc_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_chunks_order ON chunks(doc_id, chunk_idx)")
+            
             conn.commit()
     
     # --------------------------------------------------------
@@ -465,5 +481,65 @@ class PaperIndex:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("DELETE FROM papers")
             conn.execute("DELETE FROM papers_fts")
+            conn.execute("DELETE FROM chunks")
             conn.commit()
         logger.warning("Paper index cleared")
+
+    # --------------------------------------------------------
+    # Chunk Storage
+    # --------------------------------------------------------
+
+    def add_chunks(self, chunks) -> int:
+        """Store document chunks in SQLite.
+        
+        Args:
+            chunks: list of DocumentChunk objects (or dicts with chunk_id, doc_id, text, section, page, chunk_idx, word_count)
+        
+        Returns:
+            Number of chunks stored
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            count = 0
+            for c in chunks:
+                if hasattr(c, 'chunk_id'):
+                    # DocumentChunk object
+                    conn.execute(
+                        """INSERT OR REPLACE INTO chunks
+                           (chunk_id, doc_id, text, section, page, chunk_idx, word_count)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (c.chunk_id, c.doc_id, c.text, c.section, c.page,
+                         c.chunk_idx, c.word_count)
+                    )
+                elif isinstance(c, dict):
+                    conn.execute(
+                        """INSERT OR REPLACE INTO chunks
+                           (chunk_id, doc_id, text, section, page, chunk_idx, word_count)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (c.get('chunk_id', ''), c.get('doc_id', ''),
+                         c.get('text', ''), c.get('section'),
+                         c.get('page'), c.get('chunk_idx', 0),
+                         c.get('word_count', len(c.get('text', '').split())))
+                    )
+                count += 1
+            conn.commit()
+        return count
+
+    def get_chunks(self, doc_id: str) -> list[dict]:
+        """Get all chunks for a paper, ordered by chunk_idx.
+        
+        Args:
+            doc_id: Document ID
+            
+        Returns:
+            List of chunk dicts with text, section, page, word_count, chunk_idx
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT chunk_id, doc_id, text, section, page, chunk_idx, word_count
+                   FROM chunks WHERE doc_id = ? ORDER BY chunk_idx""",
+                (doc_id,)
+            ).fetchall()
+        
+        return [dict(r) for r in rows]
+

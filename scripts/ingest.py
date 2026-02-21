@@ -398,6 +398,13 @@ def ingest(
             paper_index.add_paper(indexed)
             logger.info(f"  💾 Indexed in SQLite")
             
+            # Step 4b: Store chunks in SQLite (always available, no Qdrant needed)
+            try:
+                paper_index.add_chunks(chunks)
+                logger.info(f"  📦 {len(chunks)} chunks stored in SQLite")
+            except Exception as e:
+                logger.warning(f"  ⚠️  SQLite chunk storage failed: {e}")
+            
             # Step 5: Index chunks in VectorStore (Qdrant)
             if vector_store:
                 try:

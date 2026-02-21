@@ -713,7 +713,7 @@ class GraphBuilder:
     
     def get_paper_chunks(self, doc_id: str) -> list[dict]:
         """
-        Get all chunks for a paper from Qdrant vector store.
+        Get all chunks for a paper — tries SQLite first, Qdrant as fallback.
         
         Args:
             doc_id: Document ID to fetch chunks for
@@ -721,13 +721,23 @@ class GraphBuilder:
         Returns:
             List of chunk dictionaries with text, section, page, etc.
         """
+        # Strategy 1: Try SQLite (always available, no heavy dependencies)
+        try:
+            from src.search.paper_index import PaperIndex
+            idx = PaperIndex()
+            chunks = idx.get_chunks(doc_id)
+            if chunks:
+                logger.info(f"Retrieved {len(chunks)} chunks from SQLite for doc_id={doc_id}")
+                return chunks
+        except Exception as e:
+            logger.debug(f"SQLite chunk lookup failed: {e}")
+
+        # Strategy 2: Try Qdrant (requires sentence-transformers)
         try:
             from src.retrieval.vector_store import VectorStore
             
             vs = VectorStore()
             
-            # Use scroll API to get ALL chunks for this doc_id
-            # (search with empty query + filter is more efficient than scroll for single doc)
             chunks_result, _ = vs.client.scroll(
                 collection_name=vs.collection_name,
                 scroll_filter={
@@ -738,12 +748,11 @@ class GraphBuilder:
                         }
                     ]
                 },
-                limit=1000,  # Max chunks per paper
+                limit=1000,
                 with_payload=True,
-                with_vectors=False  # Don't need vectors
+                with_vectors=False
             )
             
-            # Format results
             chunks = []
             for point in chunks_result:
                 payload = point.payload
@@ -754,17 +763,16 @@ class GraphBuilder:
                     "page": payload.get("page"),
                     "word_count": len(payload.get("text", "").split()),
                     "char_count": len(payload.get("text", "")),
-                    "chunk_idx": chunks.index(point) if hasattr(point, 'index') else None
+                    "chunk_idx": payload.get("chunk_idx", 0)
                 })
             
-            # Sort by chunk_idx if available (preserve document order)
             chunks.sort(key=lambda x: x.get("chunk_idx") or 0)
             
-            logger.info(f"Retrieved {len(chunks)} chunks for doc_id={doc_id}")
+            logger.info(f"Retrieved {len(chunks)} chunks from Qdrant for doc_id={doc_id}")
             return chunks
             
         except Exception as e:
-            logger.error(f"Failed to fetch chunks for {doc_id}: {e}")
+            logger.warning(f"Qdrant chunk lookup also failed for {doc_id}: {e}")
             return []
     
     def get_node_connections(
