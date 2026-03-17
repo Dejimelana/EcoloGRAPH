@@ -441,16 +441,16 @@ EcoloGRAPH/
 
 | Category | Domains |
 |----------| --------|
-| Aquatic | marine_ecology, coral_reef_ecology, freshwater_ecology, deep_sea_ecology, oceanography |
-| Terrestrial | forest_ecology, soil_ecology, urban_ecology, landscape_ecology, agroecology |
+| Aquatic | marine ecology, coral reef ecology, freshwater ecology, deep sea ecology, oceanography |
+| Terrestrial | forest_ecology, soil ecology, urban ecology, landscape ecology, agroecology |
 | Organisms | entomology, ornithology, herpetology, mammalogy, microbiology, phycology, mycology |
-| Processes | population_ecology, community_ecology, ecosystem_ecology, molecular_ecology, chemical_ecology |
-| Applied | conservation, restoration_ecology, wildlife_management, environmental_monitoring |
-| Climate | climate_change_ecology, paleoecology |
-| Technology | bioinformatics, remote_sensing, machine_learning, soundscape_ecology |
-| Biology | genetics, evolution, taxonomy, physiology, ethology, biotic_interactions |
+| Processes | population ecology, community ecology, ecosystem ecology, molecular ecology, chemical ecology |
+| Applied | conservation, restoration ecology, wildlife management, environmental monitoring |
+| Climate | climate change ecology, paleoecology |
+| Technology | bioinformatics, remote sensing, machine learning, soundscape ecology |
+| Biology | genetics, evolution, taxonomy, physiology, ethology, biotic interactions |
 | Earth | geology, biogeography, limnology |
-| General | general_ecology, invasive_species, parasitology, toxicology, fisheries |
+| General | general ecology, invasive species, parasitology, toxicology, fisheries |
 
 ---
 
@@ -538,4 +538,4 @@ For questions, suggestions, or collaboration:
 
 ---
 
-**Built with ❤️ for the ecological research community**
+**Built for the ecological research community**
