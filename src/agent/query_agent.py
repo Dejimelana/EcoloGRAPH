@@ -117,10 +117,13 @@ Guidelines:
 - Use tools to find real data — don't make up facts
 - Cite paper titles or sources when providing information
 - For domain-specific queries, use search_by_domain
-- Available domains: marine_ecology, freshwater_ecology, conservation, genetics, 
-  botany, zoology, entomology, ornithology, toxicology, remote_sensing, machine_learning, 
-  computer_vision, soundscape_ecology, deep_learning, physiology, ethology, 
-  biotic_interactions, geology, biogeography, and more.
+- Available domains (43): marine_ecology, freshwater_ecology, oceanography, terrestrial_ecology, 
+  soil_science, microbiology, microbial_ecology, genetics, botany, zoology, mycology, phycology, 
+  entomology, ornithology, herpetology, parasitology, toxicology, conservation, paleoecology, 
+  hydrology, climate_science, pharmacology, epidemiology, neuroscience, immunology, physiology, 
+  ethology, biotic_interactions, geology, biogeography, population_modeling, network_ecology, 
+  spatial_ecology, methodology, remote_sensing, bioinformatics, machine_learning, computer_vision, 
+  soundscape_ecology, ai_modeling, deep_learning, general_ecology, unknown.
 
 Answer in the same language the user uses."""
 
@@ -142,8 +145,8 @@ class QueryAgent:
         model: str = "auto",
         base_url: str = "http://localhost:1234/v1",
         api_key: str = "lm-studio",
-        temperature: float = 0.3,
-        max_iterations: int = 5,
+        temperature: float = 0.1,
+        max_iterations: int = 3,
     ):
         self.max_iterations = max_iterations
         self.base_url = base_url
@@ -170,7 +173,7 @@ class QueryAgent:
             base_url=base_url,
             api_key=api_key,
             temperature=temperature,
-            max_tokens=2048,
+            max_tokens=1024,
         )
         
         # Tier 2: Full LLM with tools
@@ -349,49 +352,89 @@ class QueryAgent:
                 user_msg = msg.content.lower()
                 break
         
+        # Detect language
+        en_indicators = ["hello", "hi ", "hey", "help", "what", "who", "can you", "thanks", "thank", "goodbye"]
+        is_english = any(w in user_msg for w in en_indicators)
+        
         # Greetings
         greetings = ["hola", "hello", "hi", "hey", "buenos", "buenas"]
         if any(g in user_msg for g in greetings):
-            response = (
-                f"¡Hola! 🌿 Soy EcoloGRAPH, tu asistente de investigación ecológica.\n\n"
-                f"Puedo ayudarte a:\n"
-                f"• **Buscar papers** en 43 dominios científicos\n"
-                f"• **Clasificar textos** por dominio ecológico\n"
-                f"• **Buscar info de especies** (FishBase, GBIF, IUCN)\n"
-                f"• **Encontrar conexiones** entre dominios\n"
-                f"• **Generar hipótesis** de investigación\n\n"
-                f"Modelo activo: **{self.model_name}**\n"
-                f"¡Pregúntame lo que quieras!"
-            )
+            if is_english:
+                response = (
+                    f"Hello! 🌿 I'm EcoloGRAPH, your ecological research assistant.\n\n"
+                    f"I can help you:\n"
+                    f"• **Search papers** across 43 scientific domains\n"
+                    f"• **Classify texts** by ecological domain\n"
+                    f"• **Look up species info** (FishBase, GBIF, IUCN)\n"
+                    f"• **Find connections** between domains\n"
+                    f"• **Generate research hypotheses**\n\n"
+                    f"Active model: **{self.model_name}**\n"
+                    f"Ask me anything!"
+                )
+            else:
+                response = (
+                    f"¡Hola! 🌿 Soy EcoloGRAPH, tu asistente de investigación ecológica.\n\n"
+                    f"Puedo ayudarte a:\n"
+                    f"• **Buscar papers** en 43 dominios científicos\n"
+                    f"• **Clasificar textos** por dominio ecológico\n"
+                    f"• **Buscar info de especies** (FishBase, GBIF, IUCN)\n"
+                    f"• **Encontrar conexiones** entre dominios\n"
+                    f"• **Generar hipótesis** de investigación\n\n"
+                    f"Modelo activo: **{self.model_name}**\n"
+                    f"¡Pregúntame lo que quieras!"
+                )
             return {"messages": [AIMessage(content=response)]}
         
         # Model info
         if any(k in user_msg for k in ["modelo", "model", "llm"]):
-            response = (
-                f"Estoy usando el modelo **{self.model_name}** "
-                f"(detectado de {self.base_url}).\n"
-                f"Owner: {self.model_info.get('owned_by', 'N/A')}"
-            )
+            if is_english:
+                response = (
+                    f"I'm using the **{self.model_name}** model "
+                    f"(detected from {self.base_url}).\n"
+                    f"Owner: {self.model_info.get('owned_by', 'N/A')}"
+                )
+            else:
+                response = (
+                    f"Estoy usando el modelo **{self.model_name}** "
+                    f"(detectado de {self.base_url}).\n"
+                    f"Owner: {self.model_info.get('owned_by', 'N/A')}"
+                )
             return {"messages": [AIMessage(content=response)]}
         
         # Capabilities
         if any(k in user_msg for k in ["puedes", "can you", "help", "ayuda", "capab"]):
             tools_desc = get_tool_descriptions()
-            response = (
-                f"🌿 **EcoloGRAPH** — Asistente de investigación ecológica\n\n"
-                f"{tools_desc}\n\n"
-                f"Modelo: {self.model_name} | "
-                f"Dominios: 43 | Modo: Two-Tier LangGraph"
-            )
+            if is_english:
+                response = (
+                    f"🌿 **EcoloGRAPH** — Ecological research assistant\n\n"
+                    f"{tools_desc}\n\n"
+                    f"Model: {self.model_name} | "
+                    f"Domains: 43 | Mode: Two-Tier LangGraph"
+                )
+            else:
+                response = (
+                    f"🌿 **EcoloGRAPH** — Asistente de investigación ecológica\n\n"
+                    f"{tools_desc}\n\n"
+                    f"Modelo: {self.model_name} | "
+                    f"Dominios: 43 | Modo: Two-Tier LangGraph"
+                )
             return {"messages": [AIMessage(content=response)]}
         
         # Generic meta fallback
-        response = (
-            f"Soy EcoloGRAPH, asistente de investigación ecológica.\n"
-            f"Modelo: {self.model_name}\n"
-            f"Tools: {len(self.tools)} disponibles\n"
-            f"Pregúntame sobre papers, especies, o dominios ecológicos."
-        )
+        if is_english:
+            response = (
+                f"I'm EcoloGRAPH, an ecological research assistant.\n"
+                f"Model: {self.model_name}\n"
+                f"Tools: {len(self.tools)} available\n"
+                f"Ask me about papers, species, or ecological domains."
+            )
+        else:
+            response = (
+                f"Soy EcoloGRAPH, asistente de investigación ecológica.\n"
+                f"Modelo: {self.model_name}\n"
+                f"Tools: {len(self.tools)} disponibles\n"
+                f"Pregúntame sobre papers, especies, o dominios ecológicos."
+            )
         return {"messages": [AIMessage(content=response)]}
     
     def _research_router_node(self, state: AgentState) -> dict:

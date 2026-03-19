@@ -32,13 +32,13 @@ class LLMSettings(BaseSettings):
         description="Model for entity extraction and knowledge graph construction"
     )
     reasoning_model: str = Field(
-        default="gpt-oss:20b",
+        default="qwen3:4b",
         alias="REASONING_LLM_MODEL",
         description="Text model for graph traversal, agent queries, and chat"
     )
     
     # Backward compatibility: 'model' defaults to ingestion_model
-    model: str = Field(default="gpt-oss:20b", alias="LOCAL_LLM_MODEL")
+    model: str = Field(default="qwen3:4b", alias="LOCAL_LLM_MODEL")
 
 
 class EmbeddingSettings(BaseSettings):
