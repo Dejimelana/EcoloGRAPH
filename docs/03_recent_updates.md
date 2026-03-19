@@ -26,13 +26,13 @@ Migrated to **Ollama** as primary LLM backend with **dual-model architecture**.
 ```python
 class LLMSettings(BaseSettings):
     ingestion_model: str = "qwen3:8b"   # Fast, for entity extraction
-    reasoning_model: str = "qwen3:8b"   # Deep, for agent/chat
+    reasoning_model: str = "qwen3:4b"   # Fast + capable, for agent/chat
 ```
 
 **Environment variables**:
 ```env
 INGESTION_LLM_MODEL=qwen3:8b    # Entity extraction (with /no_think)
-REASONING_LLM_MODEL=qwen3:8b    # Chat agent (thinking enabled)
+REASONING_LLM_MODEL=qwen3:4b    # Chat agent (fast + capable)
 ```
 
 #### 2. Qwen3 `reasoning` Field Support
